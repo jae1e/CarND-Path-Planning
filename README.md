@@ -10,10 +10,16 @@
    5. keep distance with preceding vehicle with 1/(1+exp(-(s_preceding-s-target_delta_s)^2)) (s_preceding-s goes very large when there is no car)
    6. if s_preceding-s hits target_delta_s, try lange shift
    
-* Lane shift
+* Check lane shift
    1. Check possible lanes (i.e., only lane 2 is available when ego car is on lane 1)
    2. If s_preceding-s of other lanes is larger than s_preceding-s of current lane, set generate trajectory
    3. if trajectory possible trajectory exists in prediction time frames, go for it!
+   
+* Lane shift
+   1. Mark predicted position of cars in prediction time frames
+   2. Generate trajectory with A*
+   3. Execute lane shift
+   4. When car gets into the target lane, run In lane scenario
 
 ---
 
