@@ -169,13 +169,21 @@ enum class BehaviorStatus
 struct ParameterSet
 {
 public: // general parameters
-	double delta_t = 0.2;
+	double pred_dt = 0.2;
+	
+	double move_dt = 0.02;
 	
 	double lane_width = 4.0;
 	
+	double max_speed = 22; // 50 MPH = 22.352 m/s;
+	
+	double max_accel = 10.0;
+	
+	double max_jerk = 10.0;
+	
 	double safety_distance = 50.0;
 	
-	double lane_change_cur_distance = 70.0;
+	double lane_change_distance = 70.0;
 	
 	double lane_change_cost_coeff = 1.2;
 	
@@ -231,7 +239,7 @@ int main() {
   	map_waypoints_dy.push_back(d_y);
   }
 	
-	// parameter set for ego vehicle
+	// parameter set
 	ParameterSet ps;
 
   h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy, &ps](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
@@ -371,26 +379,26 @@ int main() {
 					}
 					
 					// if current lane's min distance and delta speed is not enough,
-					if (lane_min_ds[ps.current_lane_id] < ps.lane_change_cur_distance
+					if (lane_min_ds[ps.current_lane_id] < ps.lane_change_distance
 						&& lane_dspeed[ps.current_lane_id] < 0)
 					{
 						// calculate lane cost
 						double current_cost = CostFunction::lane_cost(lane_min_ds[ps.current_lane_id],
 																	  lane_dspeed[ps.current_lane_id],
-																	  ps.delta_t);
+																	  ps.pred_dt);
 						
 						double left_cost = 0, right_cost = 0;
 						if (ps.current_lane_id > 0)
 						{
 							left_cost = CostFunction::lane_cost(lane_min_ds[ps.current_lane_id - 1],
 																lane_dspeed[ps.current_lane_id - 1],
-																ps.delta_t);
+																ps.pred_dt);
 						}
 						if (ps.current_lane_id < ps.num_lanes - 1)
 						{
 							right_cost = CostFunction::lane_cost(lane_min_ds[ps.current_lane_id + 1],
 																 lane_dspeed[ps.current_lane_id + 1],
-																ps.delta_t);
+																ps.pred_dt);
 						}
 						
 						// make decision
@@ -409,7 +417,17 @@ int main() {
 			// generate trajectory
 			//////////////////////////////////////////////////////////////////////////////////////////////////////
 			
-			vector<vector<char>> hitmap_xy;
+			vector<vector<char>> hitmap_sd;
+			
+			for (auto sfit = sensor_fusion.begin(); sfit != sensor_fusion.end(); ++sfit)
+			{
+				// int id = sfit->at(0);
+				double x = sfit->at(1), y = sfit->at(2);
+				double vx = sfit->at(3), vy = sfit->at(4);
+				double s = sfit->at(5), d = sfit->at(6);
+				
+				
+			}
 			
 			
 			
