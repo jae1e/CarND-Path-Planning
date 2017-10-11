@@ -8,6 +8,7 @@
 #include "Eigen-3.3/Eigen/Core"
 #include "Eigen-3.3/Eigen/QR"
 #include "json.hpp"
+#include "utils.h"
 
 using namespace std;
 
@@ -159,6 +160,40 @@ vector<double> getXY(double s, double d, const vector<double> &maps_s, const vec
 
 }
 
+enum class BehaviorStatus
+{
+	KeepLane = 0,
+	ChangeLane = 1
+};
+
+struct ParameterSet
+{
+public: // general parameters
+	double delta_t = 0.2;
+	
+	double lane_width = 4.0;
+	
+	double safety_distance = 50.0;
+	
+	double lane_change_cur_distance = 70.0;
+	
+	double lane_change_cost_coeff = 1.2;
+	
+	int num_lanes = 3;
+	
+public: // interpoaltion parameters
+	int num_src_waypoints = 10;
+	
+	int ratio_interpolation = 10;
+	
+public: // status parameters
+	int current_lane_id = 1;
+	
+	int target_lane_id = 1;
+	
+	BehaviorStatus current_status = BehaviorStatus::KeepLane;
+};
+
 int main() {
   uWS::Hub h;
 
@@ -195,8 +230,11 @@ int main() {
   	map_waypoints_dx.push_back(d_x);
   	map_waypoints_dy.push_back(d_y);
   }
+	
+	// parameter set for ego vehicle
+	ParameterSet ps;
 
-  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy, &ps](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -232,14 +270,153 @@ int main() {
 
           	// Sensor Fusion Data, a list of all other cars on the same side of the road.
           	auto sensor_fusion = j[1]["sensor_fusion"];
-
-          	json msgJson;
+			
+			json msgJson;
 
           	vector<double> next_x_vals;
           	vector<double> next_y_vals;
 
-
-          	// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
+          	//////////////////////////////////////////////////////////////////////////////////////////////////////
+			// interpolate waypoints
+			//////////////////////////////////////////////////////////////////////////////////////////////////////
+			
+			vector<double> src_waypoints_s, src_waypoints_x, src_waypoints_y, src_waypoints_dx, src_waypoints_dy;
+			vector<double> waypoints_s, waypoints_x, waypoints_y, waypoints_dx, waypoints_dy;
+			
+			{
+				int next_waypoint_id = NextWaypoint(car_x, car_y, car_yaw, map_waypoints_x, map_waypoints_y);
+				
+				int begin_waypoint_id = next_waypoint_id - ps.num_src_waypoints;
+				int end_waypoint_id = next_waypoint_id + ps.num_src_waypoints;
+				if (begin_waypoint_id < 0)
+				{
+					begin_waypoint_id = 0;
+					end_waypoint_id = begin_waypoint_id + ps.num_src_waypoints;
+				}
+				else if (end_waypoint_id > (int)map_waypoints_x.size())
+				{
+					end_waypoint_id = (int)map_waypoints_x.size();
+					begin_waypoint_id = end_waypoint_id - ps.num_src_waypoints;
+				}
+				
+				for (int wid = begin_waypoint_id; wid < end_waypoint_id; ++wid)
+				{
+					src_waypoints_s.push_back(map_waypoints_s[wid]);
+					src_waypoints_x.push_back(map_waypoints_x[wid]);
+					src_waypoints_y.push_back(map_waypoints_y[wid]);
+					src_waypoints_dx.push_back(map_waypoints_dx[wid]);
+					src_waypoints_dy.push_back(map_waypoints_dy[wid]);
+				}
+				
+				for (int i = 0; i < src_waypoints_s.size() - 1; ++i)
+				{
+					double p1 = src_waypoints_s[i];
+					double p2 = src_waypoints_s[i+1];
+					double dp = (p2 - p1) / ps.ratio_interpolation;
+					
+					for (int j = 0; j < ps.ratio_interpolation; ++j)
+					{
+						waypoints_s.push_back(p1 + j * dp);
+					}
+				}
+				waypoints_s.push_back(src_waypoints_s.back());
+				Trajectory::interpolate_points(src_waypoints_s, src_waypoints_x, ps.ratio_interpolation, waypoints_x);
+				Trajectory::interpolate_points(src_waypoints_s, src_waypoints_y, ps.ratio_interpolation, waypoints_y);
+				Trajectory::interpolate_points(src_waypoints_s, src_waypoints_dx, ps.ratio_interpolation, waypoints_dx);
+				Trajectory::interpolate_points(src_waypoints_s, src_waypoints_dy, ps.ratio_interpolation, waypoints_dy);
+			}
+			
+			//////////////////////////////////////////////////////////////////////////////////////////////////////
+			// make decision
+			//////////////////////////////////////////////////////////////////////////////////////////////////////
+			
+			{
+				// update current lane and current status
+				ps.current_lane_id = int(car_d / ps.lane_width);
+				
+				if (ps.current_status == BehaviorStatus::ChangeLane)
+				{
+					if (ps.target_lane_id == ps.current_lane_id)
+					{
+						ps.current_status = BehaviorStatus::KeepLane;
+					}
+				}
+				
+				// consider lane change only when the current status is keep lane
+				if (ps.current_status == BehaviorStatus::KeepLane)
+				{
+					// minimum distance in s of each lane
+					vector<double> lane_min_ds(ps.num_lanes, 1000);
+					vector<double> lane_dspeed(ps.num_lanes, 0);
+					
+					// fill ds and dspeed of each lane
+					for (auto sfit = sensor_fusion.begin(); sfit != sensor_fusion.end(); ++sfit)
+					{
+						// int id = sfit->at(0);
+						// double x = sfit->at(1), y = sfit->at(2);
+						double vx = sfit->at(3), vy = sfit->at(4);
+						double s = sfit->at(5), d = sfit->at(6);
+						
+						int lane_id = (int)(d / ps.lane_width);
+						if (lane_id == ps.current_lane_id)
+						{
+							if (s > car_s && s - car_s < lane_min_ds[lane_id])
+							{
+								lane_min_ds[lane_id] = s - car_s;
+								
+								double speed = sqrt(vx * vx + vy * vy);
+								lane_dspeed[lane_id] = speed - car_speed;
+							}
+						}
+					}
+					
+					// if current lane's min distance and delta speed is not enough,
+					if (lane_min_ds[ps.current_lane_id] < ps.lane_change_cur_distance
+						&& lane_dspeed[ps.current_lane_id] < 0)
+					{
+						// calculate lane cost
+						double current_cost = CostFunction::lane_cost(lane_min_ds[ps.current_lane_id],
+																	  lane_dspeed[ps.current_lane_id],
+																	  ps.delta_t);
+						
+						double left_cost = 0, right_cost = 0;
+						if (ps.current_lane_id > 0)
+						{
+							left_cost = CostFunction::lane_cost(lane_min_ds[ps.current_lane_id - 1],
+																lane_dspeed[ps.current_lane_id - 1],
+																ps.delta_t);
+						}
+						if (ps.current_lane_id < ps.num_lanes - 1)
+						{
+							right_cost = CostFunction::lane_cost(lane_min_ds[ps.current_lane_id + 1],
+																 lane_dspeed[ps.current_lane_id + 1],
+																ps.delta_t);
+						}
+						
+						// make decision
+						int target_lane_id = right_cost < left_cost ? ps.current_lane_id + 1 : ps.current_lane_id - 1;
+						double min_cost = min(right_cost, left_cost);
+						if (current_cost * ps.lane_change_cost_coeff > min_cost)
+						{
+							ps.target_lane_id = target_lane_id;
+							ps.current_status = BehaviorStatus::ChangeLane;
+						}
+					}
+				}
+			}
+			
+			//////////////////////////////////////////////////////////////////////////////////////////////////////
+			// generate trajectory
+			//////////////////////////////////////////////////////////////////////////////////////////////////////
+			
+			vector<vector<char>> hitmap_xy;
+			
+			
+			
+			//////////////////////////////////////////////////////////////////////////////////////////////////////
+			// send to simulator
+			//////////////////////////////////////////////////////////////////////////////////////////////////////
+			
           	msgJson["next_x"] = next_x_vals;
           	msgJson["next_y"] = next_y_vals;
 
