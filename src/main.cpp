@@ -186,6 +186,10 @@ public: // general parameters
 	double lane_change_distance = 70.0;
 	
 	double lane_change_cost_coeff = 1.2;
+
+	double lane_change_dt = 2.0;
+
+	double lane_change_speed_decay = 0.2;
 	
 	int num_lanes = 3;
 	
@@ -338,6 +342,10 @@ int main() {
 			// make decision
 			//////////////////////////////////////////////////////////////////////////////////////////////////////
 			
+			// minimum distance in s of each lane
+			vector<double> lane_min_ds(ps.num_lanes, 1000);
+			vector<double> lane_dspeed(ps.num_lanes, 0);
+
 			{
 				// update current lane and current status
 				ps.current_lane_id = int(car_d / ps.lane_width);
@@ -350,13 +358,13 @@ int main() {
 					}
 				}
 				
-				// consider lane change only when the current status is keep lane
-				if (ps.current_status == BehaviorStatus::KeepLane)
+				// consider lane change only when the current status is keep lane and d is within current lane's safe range
+				double current_lane_d = (0.5 + ps.current_lane_id) * ps.lane_width;
+				double lane_safe_d_width = 0.5 * ps.lane_width;
+				
+				if (ps.current_status == BehaviorStatus::KeepLane
+					&& car_d > current_lane_d - 0.5 * lane_safe_d_width && car_d < current_lane_d + 0.5 * lane_safe_d_width)
 				{
-					// minimum distance in s of each lane
-					vector<double> lane_min_ds(ps.num_lanes, 1000);
-					vector<double> lane_dspeed(ps.num_lanes, 0);
-					
 					// fill ds and dspeed of each lane
 					for (auto sfit = sensor_fusion.begin(); sfit != sensor_fusion.end(); ++sfit)
 					{
@@ -412,24 +420,63 @@ int main() {
 					}
 				}
 			}
-			
+
+			//////////////////////////////////////////////////////////////////////////////////////////////////////
+			// target points generation
+			//////////////////////////////////////////////////////////////////////////////////////////////////////
+
+			{
+				if (ps.current_status == BehaviorStatus::ChangeLane)
+				{
+					double lane_change_speed = car_speed * (1.0 - ps.lane_change_speed_decay);
+
+					// check viability : no cars within safety range while changing lane
+					bool lane_change_viable = true;
+
+					double total_dt = ps.lane_change_dt;
+					double target_s = car_s + lane_change_speed * total_dt;
+
+					double min_safe_s = target_s - ps.safety_distance;
+					double max_safe_s = target_s + ps.safety_distance;
+
+					for (auto sfit = sensor_fusion.begin(); sfit != sensor_fusion.end(); ++sfit)
+					{
+						// int id = sfit->at(0);
+						// double x = sfit->at(1), y = sfit->at(2);
+						double vx = sfit->at(3), vy = sfit->at(4);
+						double s = sfit->at(5), d = sfit->at(6);
+						int lane_id = int(d / ps.lane_width);
+						if (lane_id != ps.current_lane_id || lane_id != ps.target_lane_id)
+						{
+							continue;
+						}
+
+						double speed = sqrt(vx * vx + vy * vy);
+						double end_s = s + speed * total_dt;
+
+						if (end_s > min_safe_s && end_s < max_safe_s)
+						{
+							lane_change_viable = false;
+							break;
+						}
+					}
+
+					if (!lane_change_viable)
+					{
+						ps.current_status = BehaviorStatus::KeepLane;
+						ps.target_lane_id = ps.current_lane_id;
+					}
+				}
+			}
+
+			double target_s = 0;
+			double target_d = (0.5 + ps.target_lane_id) * ps.lane_width;
+
 			//////////////////////////////////////////////////////////////////////////////////////////////////////
 			// generate trajectory
 			//////////////////////////////////////////////////////////////////////////////////////////////////////
 			
-			vector<vector<char>> hitmap_sd;
-			
-			for (auto sfit = sensor_fusion.begin(); sfit != sensor_fusion.end(); ++sfit)
-			{
-				// int id = sfit->at(0);
-				double x = sfit->at(1), y = sfit->at(2);
-				double vx = sfit->at(3), vy = sfit->at(4);
-				double s = sfit->at(5), d = sfit->at(6);
-				
-				
-			}
-			
-			
+
 			
 			//////////////////////////////////////////////////////////////////////////////////////////////////////
 			// send to simulator
