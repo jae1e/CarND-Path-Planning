@@ -429,6 +429,7 @@ int main() {
 
 			double target_s = 0, target_ds = 0, target_dds = 0;
 			double target_d = 0, target_dd = 0, target_ddd = 0;
+			double pred_dt = 0;
 
 			{
 				double lane_change_speed = car_speed * (1.0 - ps.lane_change_speed_decay);
@@ -476,14 +477,16 @@ int main() {
 				// set target
 				if (ps.current_status == BehaviorStatus::ChangeLane)
 				{
-					target_s = car_s + lane_change_speed * ps.pred_dt;
+					pred_dt = ps.lane_change_dt;
+					target_s = car_s + lane_change_speed * pred_dt;
 					target_ds = lane_change_speed;
 				}
 				else // if (ps.current_status == BehaviorStatus::KeepLane)
 				{
-					double predicted_preceding_car_s = lane_min_ds[ps.current_lane_id] + lane_dspeed[ps.current_lane_id] * ps.pred_dt;
+					pred_dt = ps.pred_dt;
+					double predicted_preceding_car_s = lane_min_ds[ps.current_lane_id] + lane_dspeed[ps.current_lane_id] * pred_dt;
 					target_s = predicted_preceding_car_s - ps.safety_distance;
-					double keep_dist_speed = (target_s - car_s) / ps.pred_dt;
+					double keep_dist_speed = (target_s - car_s) / pred_dt;
 					target_ds = min(ps.max_speed, keep_dist_speed);
 				}
 				target_dds = 0;
@@ -556,9 +559,9 @@ int main() {
 				// generate trajectory
 				int num_traj = ps.num_pred - num_prev_path;
 				vector<double> s_traj = Trajectory::generateTrajectory(cur_s_info, tgt_s_info, 
-																		num_traj, ps.pred_dt, ps.move_dt);
+																		num_traj, pred_dt, ps.move_dt);
 				vector<double> d_traj = Trajectory::generateTrajectory(cur_d_info, tgt_d_info, 
-																		num_traj, ps.pred_dt, ps.move_dt);
+																		num_traj, pred_dt, ps.move_dt);
 
 				// use remaining points from previous path
 				for (int i = 0; i < num_prev_path; ++i)
