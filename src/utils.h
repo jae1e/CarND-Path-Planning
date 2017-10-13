@@ -19,7 +19,7 @@ using Eigen::VectorXd;
 
 namespace
 {
-namespace Trajectory
+namespace Utils
 {
 	
 void interpolatePoints(vector<double> along_points, vector<double> input_points, int ratio, vector<double>& output_points)
@@ -44,7 +44,114 @@ void interpolatePoints(vector<double> along_points, vector<double> input_points,
 	output_points.push_back(along_points.back());
 }
 
-vector<double> JMT(vector< double> start, vector <double> end, double T)
+///*
+//* prediction with constant jerk value,
+//* output: { accel, speed, pos }
+//*/
+//vector<double> matchSpeedPrediction(double jerk, double accel, double speed, double pos, 
+//									double max_jerk, double max_accel, double target_speed)
+//{
+//
+//	// max jerk speed
+//	vector<double> max_jerk_pred = Utils::constJerkPrediction(ps.max_jerk, ps.prev_dds,
+//		car_speed, car_s, pred_dt);
+//	double max_jerk_s = max_jerk_pred[2];
+//	double max_jerk_ds = max_jerk_pred[1];
+//	double max_jerk_dds = max_jerk_pred[0];
+//
+//	???
+//
+//	vector<double> traj(3);
+//	traj[0] = accel + jerk * dt;
+//	traj[1] = speed + accel * dt + 0.5 * jerk * dt * dt;
+//	traj[2] = pos + speed * dt + 0.5 * accel * dt * dt + 1.0 / 6.0 * jerk * dt * dt * dt;
+//
+//	return traj;
+//}
+//
+//double constJerkSpeedDelta(double jerk, double dt)
+//{
+//	return 0.5 * jerk * dt * dt;
+//}
+//
+///*
+//* prediction with constant jerk value, 
+//* output: { accel, speed, pos }
+//*/
+//vector<double> constJerkPrediction(double jerk, double accel, double speed, double pos, double dt)
+//{
+//	vector<double> traj(3);
+//	traj[0] = accel + jerk * dt;
+//	traj[1] = speed + accel * dt + 0.5 * jerk * dt * dt;
+//	traj[2] = pos + speed * dt + 0.5 * accel * dt * dt + 1.0 / 6.0 * jerk * dt * dt * dt;
+//
+//	return traj;
+//}
+//
+//vector<double> constJerkTrajectory(double jerk, vector<double> cur_info, int num_trajectory, double move_dt)
+//{
+//	vector<double> traj(num_trajectory);
+//
+//	double pos = cur_info[0];
+//	double speed = cur_info[1];
+//	double accel = cur_info[2];
+//
+//	// fill trajectory
+//	for (int it = 0; it < num_trajectory; ++it)
+//	{
+//		vector<double> pred = constJerkPrediction(jerk, accel, speed, pos, (it + 1) * move_dt);
+//		traj[it] = pred[2];
+//	}
+//
+//	return traj;
+//}
+
+double calculateAlpha(double accel, double max_accel, double accel_coeff)
+{
+	return 0.5 * (1.0 + accel_coeff * exp(-accel / max_accel));
+}
+
+double efficientDuration(vector< double> start, vector <double> end, double alpha)
+{
+	/*
+	Calculate the Jerk Minimizing Trajectory that connects the initial state
+	to the final state in time T.
+
+	INPUTS
+
+	start - the vehicles start location given as a length three array
+	corresponding to initial values of [s, s_dot, s_double_dot]
+
+	end   - the desired end state for vehicle. Like "start" this is a
+	length three array.
+
+	T     - The duration, in seconds, over which this maneuver should occur.
+	*/
+	double eps = 1e-2;
+	return (end[0] - start[0]) / (start[1] + alpha * (end[1] - start[1]) + eps);
+}
+
+double efficientDistance(double start_pos, double start_speed, double target_speed, double T, double alpha)
+{
+	/*
+	Calculate the Jerk Minimizing Trajectory that connects the initial state
+	to the final state in time T.
+
+	INPUTS
+
+	start - the vehicles start location given as a length three array
+	corresponding to initial values of [s, s_dot]
+
+	end   - the desired end state for vehicle. Like "start" this is a
+	length three array.
+
+	T     - The duration, in seconds, over which this maneuver should occur.
+	*/
+
+	return start_pos + (start_speed + alpha * (target_speed - start_speed)) * T;
+}
+
+vector<double> jerkMinimizingCoeffs(vector< double> start, vector <double> end, double T)
 {
 	/*
 	Calculate the Jerk Minimizing Trajectory that connects the initial state
@@ -94,20 +201,21 @@ vector<double> JMT(vector< double> start, vector <double> end, double T)
 
 }
 
-vector<double> generateTrajectory(vector<double> cur_info, vector<double> tgt_info, int num_trajectory, double pred_dt, double move_dt)
+vector<double> jerkMinimizingTrajectory(vector<double> cur_info, vector<double> tgt_info, 
+										int num_trajectory, double pred_dt, double move_dt)
 {
-	// polynomial fitting
-	auto coeffs = JMT(cur_info, tgt_info, pred_dt);
-
-	// generate trajectory
 	vector<double> traj(num_trajectory);
 
+	// polynomial fitting
+	auto coeffs = jerkMinimizingCoeffs(cur_info, tgt_info, pred_dt);
+
+	// fill trajectory
 	for (int it = 0; it < num_trajectory; ++it)
 	{
 		double val = 0;
 		for (int ic = 0; ic < coeffs.size(); ++ic)
 		{
-			val += coeffs[ic] * pow(move_dt, ic);
+			val += coeffs[ic] * pow((it + 1) * move_dt, ic);
 		}
 
 		traj[it] = val;
@@ -115,11 +223,6 @@ vector<double> generateTrajectory(vector<double> cur_info, vector<double> tgt_in
 
 	return traj;
 }
-
-} // namespace Trajectory
-	
-namespace CostFunction
-{
 
 /*
  * min_ds: s distance between ego car and preceding car
@@ -131,8 +234,7 @@ double laneCost(double min_ds, double dspeed, double delta_t)
 	return -(min_ds + dspeed * delta_t);
 }
 
-	
-} // namespace CostFunction
+} // namespace Utils
 	
 }
 
