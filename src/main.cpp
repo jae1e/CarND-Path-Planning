@@ -187,7 +187,7 @@ public: // general parameters
 	
 	double max_accel = 8.0;
 	
-	double max_speed = 21.0; // 50 MPH = 22.352 m/s;
+	double max_speed = 19.0; // 50 MPH = 22.352 m/s;
 	
 	double lane_width = 4.0;
 	
@@ -212,7 +212,7 @@ public: // lane change parameters
 	
 	double lane_change_distance = 40.0;
 
-	double lane_change_speed_decay = 0.1;
+	double lane_change_speed_decay = 0.2;
 	
 	double lane_change_cost_coeff = 1.2;
 
@@ -446,8 +446,8 @@ int main() {
 					
 					// check lane busy with current info and predicted info
 					if (lane_id > -1 && lane_id < ps.num_lanes
-						&& (s - car_s < ps.lane_change_front_safety_distance 
-							&& car_s - s > ps.lane_change_back_safety_distance))
+						&& (s < car_s + ps.lane_change_front_safety_distance
+							&& s > car_s - ps.lane_change_back_safety_distance))
 					{
 						lane_status[lane_id] = LaneStatus::Busy;
 					}
@@ -456,10 +456,10 @@ int main() {
 					double pred_d = d + dd * pred_time;
 					int pred_lane_id = (int)(pred_d / ps.lane_width);
 					if (pred_lane_id > -1 && pred_lane_id < ps.num_lanes
-						&& ((pred_s - pred_ego_s < ps.lane_change_front_safety_distance 
-							&& pred_ego_s - pred_s < ps.lane_change_back_safety_distance)
-						|| ((pred_s - pred_ego_lc_s < ps.lane_change_front_safety_distance
-							&& pred_ego_lc_s - pred_s < ps.lane_change_back_safety_distance))))
+						&& ((pred_s < pred_ego_s + ps.lane_change_front_safety_distance
+							&& pred_s > pred_ego_s - ps.lane_change_back_safety_distance)
+							|| (pred_s < pred_ego_lc_s + ps.lane_change_front_safety_distance
+								&& pred_s > pred_ego_lc_s - ps.lane_change_back_safety_distance)))
 					{
 						lane_status[pred_lane_id] = LaneStatus::Busy;
 					}
@@ -502,7 +502,7 @@ int main() {
 					&& car_d > current_lane_d - 0.5 * lane_safe_d_width && car_d < current_lane_d + 0.5 * lane_safe_d_width)
 				{
 					// if current lane's min distance and delta speed is not enough,
-					if (lane_preceding_s_dist[ps.current_lane_id] < ps.lane_change_distance
+					if (lane_preceding_s_dist[ps.current_lane_id] < ps.lane_change_distance + ps.lane_change_front_safety_distance
 						&& lane_preceding_ds[ps.current_lane_id] < car_ds)
 					{
 						// calculate lane cost
@@ -527,12 +527,15 @@ int main() {
 						}
 						
 						// make decision
-						double min_pred = min(left_pred, right_pred);
-						if (current_pred * ps.lane_change_cost_coeff < min_pred)
+						double max_pred = max(left_pred, right_pred);
+						if (max_pred > current_pred * ps.lane_change_cost_coeff)
 						{
 							ps.target_lane_id = left_pred < right_pred ? ps.current_lane_id + 1 : ps.current_lane_id - 1;
 							ps.current_status = BehaviorStatus::ChangeLane;
 						}
+
+						printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! calc lane_change\n");
+						printf("pred dist: %f %f %f\n", left_pred, current_pred, right_pred);
 					}
 				}
 			}
@@ -594,8 +597,8 @@ int main() {
 					cur_ddd = ps.last_traj_ddd;
 					
 					pred_duration = ps.emergency_change_duration;
-					target_dds = -0.5 * ps.max_accel;
 					target_ds = cur_ds * (1 - ps.emergency_speed_change);
+					target_dds = -0.5 * ps.max_accel;
 					
 					printf("!!! safety emergency\n");
 				}
@@ -634,7 +637,7 @@ int main() {
 							target_ds = max(prec_ds, (1 - ps.lane_keep_speed_change) * cur_ds);
 						}
 
-						printf("!!! need lane change\n");
+						printf("!!!!!!!!! need lane change\n");
 					}
 					// match speed to maximum speed
 					else
