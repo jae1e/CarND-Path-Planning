@@ -67,7 +67,7 @@ int NextWaypoint(double x, double y, double theta, const vector<double> &maps_x,
 {
 
 	int closestWaypoint = ClosestWaypoint(x,y,maps_x,maps_y);
-
+	
 	double map_x = maps_x[closestWaypoint];
 	double map_y = maps_y[closestWaypoint];
 
@@ -163,75 +163,89 @@ vector<double> getXY(double s, double d, const vector<double> &maps_s, const vec
 
 enum BehaviorStatus
 {
+	Start = -1,
 	KeepLane = 0,
 	ChangeLane = 1
+};
+
+enum LaneStatus
+{
+	Busy = 0,
+	Free = 1
 };
 
 struct ParameterSet
 {
 public: // general parameters
-	double pred_dt = 0.3;
+	double max_s = 6945.554;
 	
-	double move_dt = 0.02;
-
-	int num_pred = 15;
-
-	int num_keep_prev = 5;
+	int min_traj = 50;
+	
+	double iter_dt = 0.02;
+	
+	double max_jerk = 7.0;
+	
+	double max_accel = 8.0;
+	
+	double max_speed = 20.0; // 50 MPH = 22.352 m/s;
 	
 	double lane_width = 4.0;
 	
-	double max_speed = 21.0; // 50 MPH = 22.352 m/s;
+	int num_lanes = 3;
 	
-	double max_accel = 8.0;
-
-	double init_accel = 0.2 * max_accel;
-
-	double max_jerk = 1.84;/* maximum jerk value which can cover max_accel and max_speed */
-
-	double move_jerk = 0.5 * 1.84;
-
-	// double max_jerk = 1.84
-	// 				* 0.7/* safety factor for acceleration recovery case */;
+	double accel_coeff = 0.8; // velocity quickly converges when the value goes high
 	
-	double lane_change_distance = 100.0;
+public: // start parameters
+	double start_duration = 5.0;
+	
+	double start_speed = 10.0;
+	
+public: // lane keep parameters
+	double lane_keep_duration = 1.0;
+	
+	double lane_keep_speed_change = 0.1;
+	
+	double safety_distance = 20.0;
+	
+public: // lane change parameters
+	double lane_change_duration = 3.0;
+	
+	double lane_change_distance = 40.0;
 
-	double safety_distance = 50.0;
+	double lane_change_speed_decay = 0.1;
 	
 	double lane_change_cost_coeff = 1.2;
-
-	double accel_coeff = 0.5; // velocity quickly converges when the value goes high
-
-	double lane_change_dt = 3.0;
-
-	double sd_speed_rate = 5.0;
 	
-	int num_lanes = 3;
-
-	double eps = 1e-2;
+public: // emergency parameters
+	double emergency_change_duration = 3.0;
+	
+	int num_emergency_traj_keep = 5;
+	
+	double emergency_speed_change = 0.3;
 
 public: // interpoaltion parameters
-	int num_src_waypoints = 6;
+	int num_src_waypoints = 10;
 	
-	int ratio_interpolation = 60;
+	int ratio_interpolation = 50;
 	
 public: // status parameters
 	int current_lane_id = 1;
 	
 	int target_lane_id = 1;
 	
-	BehaviorStatus current_status = BehaviorStatus::KeepLane;
-
-	double prev_ds = 0;
-
-	double prev_dds = 0;
-
-	double prev_dd = 0;
-
-	double prev_ddd = 0;
-
-	vector<double> prev_traj_s;
-
-	vector<double> prev_traj_d;
+	double last_traj_s = 0;
+	
+	double last_traj_ds = 0;
+	
+	double last_traj_dds = 0;
+	
+	double last_traj_d = 0;
+	
+	double last_traj_dd = 0;
+	
+	double last_traj_ddd = 0;
+	
+	BehaviorStatus current_status = BehaviorStatus::Start;
 };
 
 int main() {
@@ -245,9 +259,8 @@ int main() {
   vector<double> map_waypoints_dy;
 
   // Waypoint map to read from
-  string map_file_ = "../data/highway_map.csv";
+  string map_file_ = "../../data/highway_map.csv";
   // The max s value before wrapping around the track back to 0
-  double max_s = 6945.554;
 
   ifstream in_map_(map_file_.c_str(), ifstream::in);
 
@@ -316,9 +329,13 @@ int main() {
           	vector<double> next_x_vals;
           	vector<double> next_y_vals;
 
-			printf("-------------------------\n");
-			printf("--- car speed: %f\n", car_speed);
-			printf("--- car s: %f\n", car_s);
+			printf("\n");
+			printf("------------------\n");
+			printf(" current car info\n");
+			printf("------------------\n");
+			printf("speed: %.2f\n", car_speed);
+			printf("s: %.2f\t d: %.2f\n", car_s, car_d);
+			printf("x: %.2f\t y: %.2f\n", car_x, car_y);
 
           	//////////////////////////////////////////////////////////////////////////////////////////////////////
 			// interpolate waypoints
@@ -371,13 +388,92 @@ int main() {
 			}
 			
 			//////////////////////////////////////////////////////////////////////////////////////////////////////
+			// check lane status
+			//////////////////////////////////////////////////////////////////////////////////////////////////////
+			
+			double car_ds = 0;
+			
+			vector<double> lane_preceding_s_dist(ps.num_lanes, ps.max_s);
+			vector<double> lane_preceding_ds(ps.num_lanes, 0);
+			vector<LaneStatus> lane_status(ps.num_lanes, LaneStatus::Free);
+			
+			{
+				vector<double> lane_pred_s(ps.num_lanes, ps.max_s);
+				
+				{
+					int closest_wp = ClosestWaypoint(car_x, car_y, waypoints_x, waypoints_y);
+					double waypoint_angle = atan2(waypoints_y[closest_wp + 1] - waypoints_y[closest_wp],
+												  waypoints_x[closest_wp + 1] - waypoints_x[closest_wp]);
+					double frenet_angle = car_yaw - waypoint_angle;
+					car_ds = car_speed * sin(frenet_angle);
+				}
+				
+				// predicted s of lane after lane change time
+				vector<double> lane_pred_min_s(ps.num_lanes, ps.max_s);
+				double pred_time = 0.5 * ps.lane_keep_duration + ps.lane_change_duration;
+				double pred_ego_s = car_s + car_ds * pred_time;
+				double pred_ego_lc_s = car_s + car_ds * (1 - ps.lane_change_speed_decay) * pred_time;
+				
+				// fill ds and dspeed of each lane
+				for (auto sfit = sensor_fusion.begin(); sfit != sensor_fusion.end(); ++sfit)
+				{
+					// int id = sfit->at(0);
+					double x = sfit->at(1), y = sfit->at(2);
+					double vx = sfit->at(3), vy = sfit->at(4);
+					double v = sqrt(vx * vx + vy * vy);
+					double s = sfit->at(5), d = sfit->at(6);
+					double yaw = atan2(vy, vx);
+					
+					int closest_wp = ClosestWaypoint(x, y, waypoints_x, waypoints_y);
+					double waypoint_angle = atan2(waypoints_y[closest_wp + 1] - waypoints_y[closest_wp],
+												  waypoints_x[closest_wp + 1] - waypoints_x[closest_wp]);
+					double frenet_angle = yaw - waypoint_angle;
+					double ds = v * sin(frenet_angle);
+					double dd = v * -cos(frenet_angle);
+					
+					// current info
+					int lane_id = (int)(d / ps.lane_width);
+					if (lane_id > -1 && lane_id < ps.num_lanes
+						&& (s > car_s && s - car_s < lane_preceding_s_dist[lane_id]))
+					{
+						lane_preceding_s_dist[lane_id] = s - car_s;
+						lane_preceding_ds[lane_id] = ds;
+					}
+					
+					// check lane busy with current info and predicted info
+					if (lane_id > -1 && lane_id < ps.num_lanes
+						&& abs(s - car_s) < ps.safety_distance)
+					{
+						lane_status[lane_id] = LaneStatus::Busy;
+					}
+					
+					double pred_s = s + ds * pred_time;
+					double pred_d = d + dd * pred_time;
+					int pred_lane_id = (int)(pred_d / ps.lane_width);
+					if (pred_lane_id > -1 && pred_lane_id < ps.num_lanes
+						&& (abs(pred_s - pred_ego_s) < ps.safety_distance || abs(pred_s - pred_ego_lc_s) < ps.safety_distance))
+					{
+						lane_status[pred_lane_id] = LaneStatus::Busy;
+					}
+				}
+			}
+			
+			vector<string> lss(ps.num_lanes);
+			for (int i = 0; i < ps.num_lanes; ++i)
+			{
+				lss[i] = lane_status[i] == LaneStatus::Busy ? "busy" : "free";
+			}
+			
+			printf("\n");
+			printf("-----------\n");
+			printf(" lane info\n");
+			printf("-----------\n");
+			printf("0: %s\t 1: %s\t 2: %s\n", lss[0].c_str(), lss[1].c_str(), lss[2].c_str());
+			
+			//////////////////////////////////////////////////////////////////////////////////////////////////////
 			// make decision
 			//////////////////////////////////////////////////////////////////////////////////////////////////////
 			
-			// minimum distance in s of each lane
-			vector<double> lane_min_ds(ps.num_lanes, 1000);
-			vector<double> lane_dspeed(ps.num_lanes, 0);
-
 			{
 				// update current lane and current status
 				ps.current_lane_id = int(car_d / ps.lane_width);
@@ -397,294 +493,255 @@ int main() {
 				if (ps.current_status == BehaviorStatus::KeepLane
 					&& car_d > current_lane_d - 0.5 * lane_safe_d_width && car_d < current_lane_d + 0.5 * lane_safe_d_width)
 				{
-					// fill ds and dspeed of each lane
-					for (auto sfit = sensor_fusion.begin(); sfit != sensor_fusion.end(); ++sfit)
-					{
-						// int id = sfit->at(0);
-						// double x = sfit->at(1), y = sfit->at(2);
-						double vx = sfit->at(3), vy = sfit->at(4);
-						double s = sfit->at(5), d = sfit->at(6);
-						
-						int lane_id = (int)(d / ps.lane_width);
-						if (lane_id == ps.current_lane_id)
-						{
-							if (s > car_s && s - car_s < lane_min_ds[lane_id])
-							{
-								lane_min_ds[lane_id] = s - car_s;
-								
-								double speed = sqrt(vx * vx + vy * vy);
-								lane_dspeed[lane_id] = speed - car_speed;
-							}
-						}
-					}
-					
 					// if current lane's min distance and delta speed is not enough,
-					if (lane_min_ds[ps.current_lane_id] < ps.lane_change_distance
-						&& lane_dspeed[ps.current_lane_id] < 0)
+					if (lane_preceding_s_dist[ps.current_lane_id] < ps.lane_change_distance
+						&& lane_preceding_ds[ps.current_lane_id] < car_ds)
 					{
 						// calculate lane cost
-						double current_cost = Utils::laneCost(lane_min_ds[ps.current_lane_id],
-															lane_dspeed[ps.current_lane_id],
-															ps.pred_dt);
+						double current_pred = Utils::prececedingDistPred(lane_preceding_s_dist[ps.current_lane_id],
+																		 lane_preceding_ds[ps.current_lane_id],
+																		 ps.lane_keep_duration);
 						
-						double left_cost = 0, right_cost = 0;
-						if (ps.current_lane_id > 0)
+						double left_pred = 0, right_pred = 0;
+						if (ps.current_lane_id > 0
+							&& lane_status[ps.current_lane_id - 1] == LaneStatus::Free)
 						{
-							left_cost = Utils::laneCost(lane_min_ds[ps.current_lane_id - 1],
-														lane_dspeed[ps.current_lane_id - 1],
-														ps.pred_dt);
+							left_pred = Utils::prececedingDistPred(lane_preceding_s_dist[ps.current_lane_id - 1],
+																   lane_preceding_ds[ps.current_lane_id - 1],
+																   ps.lane_keep_duration);
 						}
-						if (ps.current_lane_id < ps.num_lanes - 1)
+						if (ps.current_lane_id < ps.num_lanes - 1
+							&& lane_status[ps.current_lane_id + 1] == LaneStatus::Free)
 						{
-							right_cost = Utils::laneCost(lane_min_ds[ps.current_lane_id + 1],
-														lane_dspeed[ps.current_lane_id + 1],
-														ps.pred_dt);
+							right_pred = Utils::prececedingDistPred(lane_preceding_s_dist[ps.current_lane_id + 1],
+																	lane_preceding_ds[ps.current_lane_id + 1],
+																	ps.lane_keep_duration);
 						}
 						
 						// make decision
-						int target_lane_id = right_cost < left_cost ? ps.current_lane_id + 1 : ps.current_lane_id - 1;
-						double min_cost = min(right_cost, left_cost);
-						if (current_cost * ps.lane_change_cost_coeff > min_cost)
+						double min_pred = min(left_pred, right_pred);
+						if (current_pred * ps.lane_change_cost_coeff < min_pred)
 						{
-							//ps.target_lane_id = target_lane_id;
-							//ps.current_status = BehaviorStatus::ChangeLane;
-							printf("----- I better change lane!\n");
+							ps.target_lane_id = left_pred > right_pred ? ps.current_lane_id - 1 : ps.current_lane_id + 1;
+							ps.current_status = BehaviorStatus::ChangeLane;
 						}
 					}
 				}
 			}
-
-			std::string decision = ps.current_status == BehaviorStatus::ChangeLane ? "change" : "keep";
-			printf("--- current lane: %d\n", ps.current_lane_id);
-			printf("--- decision: %s\n", decision.c_str());
-			printf("--- target lane: %d\n", ps.target_lane_id);
-
+			
+			std::string decision = ps.current_status == BehaviorStatus::ChangeLane ? "change lane" : "keep lane";
+			
+			printf("\n");
+			printf("--------------------\n");
+			printf(" lane decision info\n");
+			printf("--------------------\n");
+			printf("decision: %s\n", decision.c_str());
+			printf("current lane id: %d\n", ps.current_lane_id);
+			printf("target lane id: %d\n", ps.target_lane_id);
+			
 			//////////////////////////////////////////////////////////////////////////////////////////////////////
 			// target generation
 			//////////////////////////////////////////////////////////////////////////////////////////////////////
-
+			
+			double cur_s = ps.last_traj_s == 0 ? car_s : ps.last_traj_s;
+			double cur_ds = ps.last_traj_ds;
+			double cur_dds = ps.last_traj_dds;
+			double cur_d = ps.last_traj_s == 0 ? car_d : ps.last_traj_d;
+			double cur_dd = ps.last_traj_dd;
+			double cur_ddd = ps.last_traj_ddd;
+			
 			double target_s = 0, target_ds = 0, target_dds = 0;
 			double target_d = 0, target_dd = 0, target_ddd = 0;
-
-			double alpha_s = Utils::calculateAlpha(ps.prev_dds, ps.max_accel, ps.accel_coeff);
-
+			
+			bool emergency = false;
+			double pred_duration = 0;
+			
 			{
-				// check viability : no cars within safety range while changing lane
-				if (ps.current_status == BehaviorStatus::ChangeLane)
+				// calculate target info
+				if (lane_preceding_s_dist[ps.target_lane_id] < ps.safety_distance)
 				{
-					bool lane_change_viable = true;
-
-					double total_dt = ps.lane_change_dt;
-					double target_s = car_s + car_speed * total_dt;
-
-					double min_safe_s = target_s - ps.safety_distance;
-					double max_safe_s = target_s + ps.safety_distance;
-
-					for (auto sfit = sensor_fusion.begin(); sfit != sensor_fusion.end(); ++sfit)
-					{
-						// int id = sfit->at(0);
-						// double x = sfit->at(1), y = sfit->at(2);
-						double vx = sfit->at(3), vy = sfit->at(4);
-						double s = sfit->at(5), d = sfit->at(6);
-						int lane_id = int(d / ps.lane_width);
-						if (lane_id != ps.current_lane_id || lane_id != ps.target_lane_id)
-						{
-							continue;
-						}
-
-						double speed = sqrt(vx * vx + vy * vy);
-						double end_s = s + speed * total_dt;
-
-						if (end_s > min_safe_s && end_s < max_safe_s)
-						{
-							lane_change_viable = false;
-							break;
-						}
-					}
-
-					if (!lane_change_viable)
-					{
-						ps.current_status = BehaviorStatus::KeepLane;
-						ps.target_lane_id = ps.current_lane_id;
-					}
+					// target_ds = lane_prec_ds[target_lane_id];
+					// target_s = lane_prec_s[target_lane_id] + target_ds * pred_duration - ps.safety_distance;
+					target_ds = (1 - ps.lane_keep_speed_change) * target_ds;
+					
+					emergency = true;
+					
+					double x = previous_path_x[ps.num_emergency_traj_keep - 1];
+					double y = previous_path_y[ps.num_emergency_traj_keep - 1];
+					
+					vector<double> sd = getFrenet(x, y, car_yaw, waypoints_x, waypoints_y);
+					
+					int closest_wp = ClosestWaypoint(x, y, waypoints_x, waypoints_y);
+					double waypoint_angle = atan2(waypoints_y[closest_wp + 1] - waypoints_y[closest_wp],
+												  waypoints_x[closest_wp + 1] - waypoints_x[closest_wp]);
+					double frenet_angle = car_yaw - waypoint_angle;
+					double ds = car_speed * sin(frenet_angle);
+					double dd = car_speed * -cos(frenet_angle);
+					
+					cur_s = sd[0];
+					cur_ds = ds;
+					cur_dds = ps.last_traj_dds;
+					cur_d = sd[1];
+					cur_dd = dd;
+					cur_ddd = ps.last_traj_ddd;
+					
+					pred_duration = ps.emergency_change_duration;
+					target_dds = -0.5 * ps.max_accel;
+					target_ds = cur_ds * (1 - ps.emergency_speed_change);
+					
+					printf("!!! safety emergency\n");
 				}
-
-				// set s target
-				target_dds = 0;
-
-				if (ps.current_status == BehaviorStatus::ChangeLane)
+				else if (ps.current_status == BehaviorStatus::Start)
 				{
-					double lane_change_speed = car_speed * (1 - 1 / ps.sd_speed_rate);
-					target_ds = car_speed;
-					target_s = Utils::efficientDistance(car_s, car_speed, lane_change_speed, ps.lane_change_dt, alpha_s);
+					pred_duration = ps.start_duration;
+					target_dds = 0;
+					target_ds = ps.start_speed;
+					printf("!!! start\n");
+				}
+				else if (ps.current_status == BehaviorStatus::ChangeLane)
+				{
+					pred_duration = ps.lane_change_duration;
+					target_dds = 0;
+					target_ds = cur_ds * (1.0 - ps.lane_change_speed_decay);
+					printf("!!! change lane\n");
 				}
 				else // if (ps.current_status == BehaviorStatus::KeepLane)
 				{
-					// match speed and lane changing distance if preceding car is within detect distance range
-					if (lane_min_ds[ps.current_lane_id] - car_s < ps.lane_change_distance)
+					pred_duration = ps.lane_keep_duration;
+					target_dds = 0;
+					
+					// match speed to preceding car
+					if (lane_preceding_s_dist[ps.target_lane_id] < ps.lane_change_distance)
 					{
-						target_ds = lane_dspeed[ps.current_lane_id];
-						target_s = car_s + ps.lane_change_distance;
+						double prec_ds = lane_preceding_ds[ps.target_lane_id];
+						
+						if (prec_ds > cur_ds)
+						{
+							target_ds = min(prec_ds, (1 + ps.lane_keep_speed_change) * cur_ds);
+						}
+						else
+						{
+							target_ds = max(prec_ds, (1 - ps.lane_keep_speed_change) * cur_ds);
+						}
+						printf("!!! need lane change\n");
 					}
 					// match speed to maximum speed
 					else
 					{
-						printf("----- go for max speed!!\n");
-						target_ds = ps.max_speed;
-						target_s = car_s + ps.lane_change_distance;
+						double target_speed = ps.max_speed;
+						if (target_speed > cur_ds)
+						{
+							target_ds = min(target_speed, (1 + ps.lane_keep_speed_change) * cur_ds);
+						}
+						else
+						{
+							target_ds = max(target_speed, (1 - ps.lane_keep_speed_change) * cur_ds);
+						}
+						printf("!!! go max\n");
 					}
 				}
-
-				// calculate d info
+				
+				target_s = Utils::efficientDistance(cur_s, cur_ds, target_ds, pred_duration, ps.accel_coeff);
+				
+				target_ddd = 0;
+				target_dd = 0;
 				target_d = (0.5 + ps.target_lane_id) * ps.lane_width;
-
-				double sign_d = target_d > car_d ? 1 : -1;
-				target_dd = sign_d * ps.eps;
-				target_ddd = -sign_d * ps.eps;
 			}
-
+			
+//			printf("----- cur s, ds, dds: %f %f %f\n", cur_s, cur_ds, cur_dds);
+//			printf("----- target s, ds, dds: %f %f %f\n", target_s, target_ds, target_dds);
+//			printf("----- cur d, dd, ddd: %f %f %f\n", cur_d, cur_dd, cur_ddd);
+//			printf("----- target d, dd, ddd: %f %f %f\n", target_d, target_dd, target_ddd);
+//			printf("----- pred_duration: %f\n", pred_duration);
+			
 			//////////////////////////////////////////////////////////////////////////////////////////////////////
 			// generate trajectory
 			//////////////////////////////////////////////////////////////////////////////////////////////////////
 			
+			int num_prev_path = 0;
+			int num_traj = 0;
+			
 			{
-				double s_cur = end_path_s > 0 ? end_path_s : car_s;
-				double ds_cur = ps.prev_ds > 0 ? ps.prev_ds : car_speed;
-				double dds_cur = ps.prev_dds;
-
-				double d_cur = end_path_d > 0 ? end_path_d : car_d;
-				double dd_cur = ps.prev_dd;
-				double ddd_cur = ps.prev_ddd;
-
-				int num_prev_path = previous_path_x.size();
-				printf("--- num_prev_path: %d\n", num_prev_path);
-
-				int num_prev_end = min(num_prev_path, ps.num_keep_prev);
-
-				// calculate current s and d info
-				if (num_prev_end == ps.num_keep_prev)
-				{
-					//vector<double> x_prev(3);
-					//vector<double> y_prev(3);
-					//vector<double> s_prev(3);
-					//vector<double> d_prev(3);
-
-					//// get frenet coord of previous path
-					//int step = (num_prev_end - 1) / 3;
-					//int begin_path_i = (num_prev_end - 1) - 3 * step;
-					//for (int i = 0; i < 3; ++i)
-					//{
-					//	int path_i = begin_path_i + step * i;
-					//	double x1 = previous_path_x[path_i];
-					//	double x2 = previous_path_x[path_i + step];
-					//	double y1 = previous_path_y[path_i];
-					//	double y2 = previous_path_y[path_i + step];
-					//	double angle = atan2(y1 - y2, x1 - x2);
-					//	printf("-- angle, car_yaw: %f %f\n", angle, car_yaw);
-					//	if (abs(angle - car_yaw) > pi() / 8)
-					//	{
-					//		angle = car_yaw;
-					//	}
-					//	printf("-- old traj x1 y1: %f %f\n", x1, y1);
-					//	printf("-- old traj x2 y2: %f %f\n", x2, y2);
-					//	vector<double> frenet = getFrenet(x2, y2, angle, waypoints_x, waypoints_y);
-					//	x_prev[i] = x2;
-					//	y_prev[i] = y2;
-					//	s_prev[i] = frenet[0];
-					//	d_prev[i] = frenet[1];
-					//	printf("old traj sd and num_step: %f %f, %d\n", frenet[0], frenet[1], step);
-					//}
-
-					//double dt = ps.move_dt * step;
-					//s_cur = s_prev[2];
-					//ds_cur = (s_prev[2] - s_prev[1]) / dt;
-					//dds_cur = (ds_cur - ((s_prev[1] - s_prev[0]) / dt)) / dt;
-					//d_cur = d_prev[2];
-					//dd_cur = (d_prev[2] - d_prev[1]) / dt;
-					//ddd_cur = (dd_cur - ((d_prev[1] - d_prev[0]) / dt)) / dt;
-
-					int step = 2; //(num_prev_end - 1) / 3;
-					int prev_traj_size = ps.prev_traj_s.size();
-					int prev_start_index = prev_traj_size - num_prev_end;
-					double dt = ps.move_dt * step;
-
-					int i2 = prev_traj_size - 1;
-					int i1 = prev_traj_size - 1 - step;
-					int i0 = prev_traj_size - 1 - 2 * step;
-					s_cur = ps.prev_traj_s[i2];
-					ds_cur = (s_cur - ps.prev_traj_s[i1]) / dt;
-					dds_cur = (ds_cur - ((ps.prev_traj_s[i1] - ps.prev_traj_s[i0]) / dt)) / dt;
-					d_cur = ps.prev_traj_d[i2];
-					dd_cur = (d_cur - ps.prev_traj_d[i1]) / dt;
-					ddd_cur = (dd_cur - ((ps.prev_traj_d[i1] - ps.prev_traj_d[i0]) / dt)) / dt;
-
-					for (int i = 0; i < num_prev_end; ++i)
-					{
-						printf("--- old traj sd: %f %f\n", ps.prev_traj_s[prev_start_index + i], ps.prev_traj_d[prev_start_index + i]);
-					}
-				}
-				else
-				{
-					num_prev_end = 0;
-				}
-
-				vector<double> cur_s_info = { s_cur, ds_cur, dds_cur };
-				vector<double> tgt_s_info = { target_s, target_ds, target_dds };
-				vector<double> cur_d_info = { d_cur, dd_cur, ddd_cur };
-				vector<double> tgt_d_info = { target_d, target_dd, target_ddd };
-
-				double duration_s = Utils::efficientDuration(cur_s_info, tgt_s_info, alpha_s);
-				double duration_d = ps.lane_change_dt;
-				printf("duration_s: %f\n", duration_s);
-
-				int num_traj = ps.num_pred - num_prev_end;
-				vector<double> s_traj = Utils::jerkMinimizingTrajectory(cur_s_info, tgt_s_info,
-																		num_traj, duration_s, ps.move_dt);
-				vector<double> d_traj = Utils::jerkMinimizingTrajectory(cur_d_info, tgt_d_info,
-																		num_traj, duration_d, ps.move_dt);
-
+				num_prev_path = emergency ? ps.num_emergency_traj_keep : previous_path_x.size();
+				
 				// use remaining points from previous path
-				for (int i = 0; i < num_prev_end; ++i)
+				for (int i = 0; i < num_prev_path; ++i)
 				{
 					next_x_vals.push_back(previous_path_x[i]);
 					next_y_vals.push_back(previous_path_y[i]);
-
+					
 					// printf("old traj xy: %f %f\n", (double)previous_path_x[i], (double)previous_path_y[i]);
 				}
-
-				// fill predicted xy trajectory
-				for (int i = 0; i < num_traj; ++i)
+				
+				if (num_prev_path < ps.min_traj)
 				{
-					vector<double> xy = getXY(s_traj[i], d_traj[i], waypoints_s, waypoints_x, waypoints_y);
-					next_x_vals.push_back(xy[0]);
-					next_y_vals.push_back(xy[1]);
-
-					// printf("new traj xy: %f %f\n", xy[0], xy[1]);
+					num_traj = pred_duration / ps.iter_dt;
+					
+					vector<double> cur_s_info = { cur_s, cur_ds, cur_dds };
+					vector<double> tgt_s_info = { target_s, target_ds, target_dds };
+					vector<double> cur_d_info = { cur_d, cur_dd, cur_ddd };
+					vector<double> tgt_d_info = { target_d, target_dd, target_ddd };
+					
+					vector<double> traj_s = Utils::jerkMinimizingTrajectory(cur_s_info, tgt_s_info,
+																			num_traj, pred_duration, ps.iter_dt);
+					vector<double> traj_d = Utils::jerkMinimizingTrajectory(cur_d_info, tgt_d_info,
+																			num_traj, pred_duration, ps.iter_dt);
+					
+					for (int i = 0; i < num_prev_path; ++i)
+					{
+						double x = previous_path_x[i];
+						double y = previous_path_y[i];
+						int closest_wp = ClosestWaypoint(x, y, waypoints_x, waypoints_y);
+						double waypoint_angle = atan2(waypoints_y[closest_wp + 1] - waypoints_y[closest_wp],
+													  waypoints_x[closest_wp + 1] - waypoints_x[closest_wp]);
+						
+						vector<double> sd = getFrenet(x, y, waypoint_angle, waypoints_x, waypoints_y);
+						
+//						printf("old traj sd: %f %f\n", sd[0], sd[1]);
+//						printf("old traj xy: %f %f\n", (double)x, (double)y);
+					}
+					
+					for (int i = 0; i < num_traj; ++i)
+					{
+						vector<double> xy = getXY(traj_s[i], traj_d[i], waypoints_s, waypoints_x, waypoints_y);
+						next_x_vals.push_back(xy[0]);
+						next_y_vals.push_back(xy[1]);
+						
+//						printf("new traj xy: %f %f\n", xy[0], xy[1]);
+					}
+					
+					// save trajectory last point
+					ps.last_traj_s = traj_s.back();
+					
+					ps.last_traj_ds = target_ds;
+					
+					ps.last_traj_dds = target_dds;
+					
+					ps.last_traj_d = traj_d.back();
+					
+					ps.last_traj_dd = target_dd;
+					
+					ps.last_traj_ddd = target_ddd;
 				}
-
-				// update prev s and d info with trajectory
-				int num_step = (int)((num_traj - 1) / 2);
-				double step_dt = ps.move_dt * num_step;
-				ps.prev_ds = (s_traj[2 * num_step] - s_traj[1 * num_step]) / step_dt;
-				ps.prev_dds = (ds_cur - ((s_traj[1 * num_step] - s_traj[0]) / step_dt)) / step_dt;
-				ps.prev_dd = (d_traj[2 * num_step] - d_traj[1 * num_step]) / step_dt;
-				ps.prev_ddd = (dd_cur - ((d_traj[1 * num_step] - d_traj[0]) / step_dt)) / step_dt;
-
-				ps.prev_traj_s.clear();
-				ps.prev_traj_d.clear();
-				for (int i = 0; i < num_traj; ++i)
+				
+				printf("\n");
+				printf("-----------------\n");
+				printf(" trajectory info\n");
+				printf("-----------------\n");
+				printf("target s: %.2f\t d: %.2f\n", ps.last_traj_s, ps.last_traj_d);
+				printf("target ds: %.2f\t dd: %.2f\n", ps.last_traj_ds, ps.last_traj_dd);
+				printf("target dds: %.2f\t ddd: %.2f\n", ps.last_traj_dds, ps.last_traj_ddd);
+				printf("remaining count: %d\n", num_prev_path);
+				printf("predicted count: %d\n", num_traj);
+				printf("\n");
+			}
+			
+			{
+				// change status from start to keep lane
+				if (ps.current_status == BehaviorStatus::Start)
 				{
-					ps.prev_traj_s.push_back(s_traj[i]);
-					ps.prev_traj_d.push_back(d_traj[i]);
-
-					printf("--- new traj sd: %f %f\n", s_traj[i], d_traj[i]);
+					ps.current_status = BehaviorStatus::KeepLane;
 				}
-
-				printf("--- previous traj: %d\n", num_prev_end);
-				printf("--- predicted traj: %d\n", num_traj);
-
-				printf("--- current ds, dds: %f, %f\n", ps.prev_ds, ps.prev_dds);
-				printf("--- current dd, ddd: %f, %f\n", ps.prev_dd, ps.prev_ddd);
 			}
 			
 			//////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -723,7 +780,7 @@ int main() {
   });
 
   h.onConnection([&h](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
-    std::cout << "Connected!!!" << std::endl;
+    // std::cout << "Connected!!!" << std::endl;
   });
 
   h.onDisconnection([&h](uWS::WebSocket<uWS::SERVER> ws, int code,

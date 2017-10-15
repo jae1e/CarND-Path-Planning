@@ -106,9 +106,9 @@ void interpolatePoints(vector<double> along_points, vector<double> input_points,
 //	return traj;
 //}
 
-double calculateAlpha(double accel, double max_accel, double accel_coeff)
+double calculateAlpha(double accel, double max_accel, double coeff1, double coeff2)
 {
-	return 0.5 * (1.0 + accel_coeff * exp(-accel / max_accel));
+	return 0.5 * (1.0 + coeff1 * exp(-coeff2 * accel / max_accel));
 }
 
 double efficientDuration(vector< double> start, vector <double> end, double alpha)
@@ -147,7 +147,8 @@ double efficientDistance(double start_pos, double start_speed, double target_spe
 
 	T     - The duration, in seconds, over which this maneuver should occur.
 	*/
-
+	
+	return start_pos + (start_speed + 1 * (target_speed - start_speed)) * T;
 	return start_pos + (start_speed + alpha * (target_speed - start_speed)) * T;
 }
 
@@ -202,7 +203,7 @@ vector<double> jerkMinimizingCoeffs(vector< double> start, vector <double> end, 
 }
 
 vector<double> jerkMinimizingTrajectory(vector<double> cur_info, vector<double> tgt_info, 
-										int num_trajectory, double pred_dt, double move_dt)
+										int num_trajectory, double pred_dt, double iter_dt)
 {
 	vector<double> traj(num_trajectory);
 
@@ -215,7 +216,7 @@ vector<double> jerkMinimizingTrajectory(vector<double> cur_info, vector<double> 
 		double val = 0;
 		for (int ic = 0; ic < coeffs.size(); ++ic)
 		{
-			val += coeffs[ic] * pow((it + 1) * move_dt, ic);
+			val += coeffs[ic] * pow((it + 1) * iter_dt, ic);
 		}
 
 		traj[it] = val;
@@ -225,13 +226,13 @@ vector<double> jerkMinimizingTrajectory(vector<double> cur_info, vector<double> 
 }
 
 /*
- * min_ds: s distance between ego car and preceding car
- * dspeed: speed of preceding car - speed of ego car
+ * prec_s_dist: s position of preceding car - s position of ego car
+ * prec_ds: speed of preceding car
  * delta_t: timespan of interest
  */
-double laneCost(double min_ds, double dspeed, double delta_t)
+double prececedingDistPred(double prec_s_dist, double prec_ds, double delta_t)
 {
-	return -(min_ds + dspeed * delta_t);
+	return prec_s_dist + prec_ds * delta_t;
 }
 
 } // namespace Utils
