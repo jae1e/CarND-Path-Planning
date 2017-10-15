@@ -187,7 +187,7 @@ public: // general parameters
 	
 	double max_accel = 8.0;
 	
-	double max_speed = 20.0; // 50 MPH = 22.352 m/s;
+	double max_speed = 21.0; // 50 MPH = 22.352 m/s;
 	
 	double lane_width = 4.0;
 	
@@ -215,6 +215,10 @@ public: // lane change parameters
 	double lane_change_speed_decay = 0.1;
 	
 	double lane_change_cost_coeff = 1.2;
+
+	double lane_change_front_safety_distance = 20.0;
+
+	double lane_change_back_safety_distance = 10.0;
 	
 public: // emergency parameters
 	double emergency_change_duration = 3.0;
@@ -259,7 +263,7 @@ int main() {
   vector<double> map_waypoints_dy;
 
   // Waypoint map to read from
-  string map_file_ = "../../data/highway_map.csv";
+  string map_file_ = "../data/highway_map.csv";
   // The max s value before wrapping around the track back to 0
 
   ifstream in_map_(map_file_.c_str(), ifstream::in);
@@ -442,7 +446,8 @@ int main() {
 					
 					// check lane busy with current info and predicted info
 					if (lane_id > -1 && lane_id < ps.num_lanes
-						&& abs(s - car_s) < ps.safety_distance)
+						&& (s - car_s < ps.lane_change_front_safety_distance 
+							&& car_s - s > ps.lane_change_back_safety_distance))
 					{
 						lane_status[lane_id] = LaneStatus::Busy;
 					}
@@ -451,7 +456,10 @@ int main() {
 					double pred_d = d + dd * pred_time;
 					int pred_lane_id = (int)(pred_d / ps.lane_width);
 					if (pred_lane_id > -1 && pred_lane_id < ps.num_lanes
-						&& (abs(pred_s - pred_ego_s) < ps.safety_distance || abs(pred_s - pred_ego_lc_s) < ps.safety_distance))
+						&& ((pred_s - pred_ego_s < ps.lane_change_front_safety_distance 
+							&& pred_ego_s - pred_s < ps.lane_change_back_safety_distance)
+						|| ((pred_s - pred_ego_lc_s < ps.lane_change_front_safety_distance
+							&& pred_ego_lc_s - pred_s < ps.lane_change_back_safety_distance))))
 					{
 						lane_status[pred_lane_id] = LaneStatus::Busy;
 					}
@@ -522,7 +530,7 @@ int main() {
 						double min_pred = min(left_pred, right_pred);
 						if (current_pred * ps.lane_change_cost_coeff < min_pred)
 						{
-							ps.target_lane_id = left_pred > right_pred ? ps.current_lane_id - 1 : ps.current_lane_id + 1;
+							ps.target_lane_id = left_pred < right_pred ? ps.current_lane_id + 1 : ps.current_lane_id - 1;
 							ps.current_status = BehaviorStatus::ChangeLane;
 						}
 					}
@@ -596,6 +604,7 @@ int main() {
 					pred_duration = ps.start_duration;
 					target_dds = 0;
 					target_ds = ps.start_speed;
+
 					printf("!!! start\n");
 				}
 				else if (ps.current_status == BehaviorStatus::ChangeLane)
@@ -603,6 +612,7 @@ int main() {
 					pred_duration = ps.lane_change_duration;
 					target_dds = 0;
 					target_ds = cur_ds * (1.0 - ps.lane_change_speed_decay);
+
 					printf("!!! change lane\n");
 				}
 				else // if (ps.current_status == BehaviorStatus::KeepLane)
@@ -623,6 +633,7 @@ int main() {
 						{
 							target_ds = max(prec_ds, (1 - ps.lane_keep_speed_change) * cur_ds);
 						}
+
 						printf("!!! need lane change\n");
 					}
 					// match speed to maximum speed
@@ -637,6 +648,7 @@ int main() {
 						{
 							target_ds = max(target_speed, (1 - ps.lane_keep_speed_change) * cur_ds);
 						}
+
 						printf("!!! go max\n");
 					}
 				}
