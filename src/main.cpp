@@ -20,6 +20,7 @@ using json = nlohmann::json;
 constexpr double pi() { return M_PI; }
 double deg2rad(double x) { return x * pi() / 180; }
 double rad2deg(double x) { return x * 180 / pi(); }
+double mph2mps(double x) { return x * 0.44704; }
 
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
@@ -85,7 +86,7 @@ int NextWaypoint(double x, double y, double theta, const vector<double> &maps_x,
 }
 
 // Transform from Cartesian x,y coordinates to Frenet s,d coordinates
-vector<double> getFrenet(double x, double y, double theta, const vector<double> &maps_x, const vector<double> &maps_y)
+vector<double> getFrenet(double x, double y, double theta, const vector<double> &maps_x, const vector<double> &maps_y, const vector<double> &maps_s)
 {
 	int next_wp = NextWaypoint(x,y, theta, maps_x,maps_y);
 
@@ -121,7 +122,7 @@ vector<double> getFrenet(double x, double y, double theta, const vector<double> 
 	}
 
 	// calculate s value
-	double frenet_s = 0;
+	double frenet_s = maps_s[0];
 	for(int i = 0; i < prev_wp; i++)
 	{
 		frenet_s += distance(maps_x[i],maps_y[i],maps_x[i+1],maps_y[i+1]);
@@ -204,13 +205,11 @@ public: // lane keep parameters
 	double lane_keep_duration = 1.0;
 	
 	double lane_keep_speed_change = 0.1;
-	
-	double safety_distance = 20.0;
-	
+		
 public: // lane change parameters
 	double lane_change_duration = 3.0;
 	
-	double lane_change_distance = 40.0;
+	double lane_change_distance = 50.0;
 
 	double lane_change_speed_decay = 0.2;
 	
@@ -220,12 +219,12 @@ public: // lane change parameters
 
 	double lane_change_back_safety_distance = 10.0;
 	
-public: // emergency parameters
-	double emergency_change_duration = 3.0;
-	
-	int num_emergency_traj_keep = 5;
-	
-	double emergency_speed_change = 0.3;
+public: // safety parameters
+	double safety_change_duration = 1.0;
+
+	double safety_distance = 30.0;
+
+	double safety_speed_change = 0.3;
 
 public: // interpoaltion parameters
 	int num_src_waypoints = 10;
@@ -333,13 +332,15 @@ int main() {
           	vector<double> next_x_vals;
           	vector<double> next_y_vals;
 
+			printf("------------------------------------------------\n");
 			printf("\n");
 			printf("------------------\n");
 			printf(" current car info\n");
 			printf("------------------\n");
-			printf("speed: %.2f\n", car_speed);
 			printf("s: %.2f\t d: %.2f\n", car_s, car_d);
 			printf("x: %.2f\t y: %.2f\n", car_x, car_y);
+			printf("speed: %.2f\t yaw: %.2f\n", mph2mps(car_speed), deg2rad(car_yaw));
+			printf("yaw: %.2f\n", car_yaw);
 
           	//////////////////////////////////////////////////////////////////////////////////////////////////////
 			// interpolate waypoints
@@ -349,7 +350,7 @@ int main() {
 			vector<double> waypoints_s, waypoints_x, waypoints_y, waypoints_dx, waypoints_dy;
 			
 			{
-				int next_waypoint_id = NextWaypoint(car_x, car_y, car_yaw, map_waypoints_x, map_waypoints_y);
+				int next_waypoint_id = NextWaypoint(car_x, car_y, deg2rad(car_yaw), map_waypoints_x, map_waypoints_y);
 				
 				int begin_waypoint_id = next_waypoint_id - 0.5 * ps.num_src_waypoints;
 				int end_waypoint_id = next_waypoint_id + 0.5 *  ps.num_src_waypoints;
@@ -409,7 +410,7 @@ int main() {
 					double waypoint_angle = atan2(waypoints_y[closest_wp + 1] - waypoints_y[closest_wp],
 												  waypoints_x[closest_wp + 1] - waypoints_x[closest_wp]);
 					double frenet_angle = car_yaw - waypoint_angle;
-					car_ds = car_speed * sin(frenet_angle);
+					car_ds = mph2mps(car_speed) * sin(frenet_angle);
 				}
 				
 				// predicted s of lane after lane change time
@@ -432,8 +433,10 @@ int main() {
 					double waypoint_angle = atan2(waypoints_y[closest_wp + 1] - waypoints_y[closest_wp],
 												  waypoints_x[closest_wp + 1] - waypoints_x[closest_wp]);
 					double frenet_angle = yaw - waypoint_angle;
-					double ds = v * sin(frenet_angle);
-					double dd = v * -cos(frenet_angle);
+					double ds = v * cos(frenet_angle);
+					double dd = v * sin(frenet_angle);
+					// printf("other car's v ds dd: %f %f %f\n", v, ds, dd);
+					// printf("other car's yaw wpa frenet: %f %f %f\n", yaw, waypoint_angle, frenet_angle);
 					
 					// current info
 					int lane_id = (int)(d / ps.lane_width);
@@ -533,9 +536,6 @@ int main() {
 							ps.target_lane_id = left_pred < right_pred ? ps.current_lane_id + 1 : ps.current_lane_id - 1;
 							ps.current_status = BehaviorStatus::ChangeLane;
 						}
-
-						printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! calc lane_change\n");
-						printf("pred dist: %f %f %f\n", left_pred, current_pred, right_pred);
 					}
 				}
 			}
@@ -564,30 +564,46 @@ int main() {
 			double target_s = 0, target_ds = 0, target_dds = 0;
 			double target_d = 0, target_dd = 0, target_ddd = 0;
 			
-			bool emergency = false;
 			double pred_duration = 0;
 			
 			{
+				// // conversion test
+				// if (previous_path_x.size() > ps.num_emergency_traj_keep)
+				// {
+				// 	double x = previous_path_x[ps.num_emergency_traj_keep - 1];
+				// 	double y = previous_path_y[ps.num_emergency_traj_keep - 1];
+					
+				// 	vector<double> sd = getFrenet(x, y, deg2rad(car_yaw), waypoints_x, waypoints_y, waypoints_s);
+					
+				// 	int closest_wp = ClosestWaypoint(x, y, waypoints_x, waypoints_y);
+				// 	double waypoint_angle = atan2(waypoints_y[closest_wp + 1] - waypoints_y[closest_wp],
+				// 								  waypoints_x[closest_wp + 1] - waypoints_x[closest_wp]);
+				// 	double frenet_angle = deg2rad(car_yaw) - waypoint_angle;
+				// 	double ds = car_speed * cos(frenet_angle);
+				// 	double dd = car_speed * sin(frenet_angle);
+
+				// 	printf("conversion x y angle s d: %f %f %f %f %f\n", x, y, waypoint_angle, sd[0], sd[1]);
+				// }
+
 				// calculate target info
+				printf("target lane s dist: %f\n", lane_preceding_s_dist[ps.target_lane_id]);
 				if (lane_preceding_s_dist[ps.target_lane_id] < ps.safety_distance)
 				{
 					// target_ds = lane_prec_ds[target_lane_id];
 					// target_s = lane_prec_s[target_lane_id] + target_ds * pred_duration - ps.safety_distance;
 					target_ds = (1 - ps.lane_keep_speed_change) * target_ds;
 					
-					emergency = true;
+					double x = previous_path_x.back();
+					double y = previous_path_y.back();
 					
-					double x = previous_path_x[ps.num_emergency_traj_keep - 1];
-					double y = previous_path_y[ps.num_emergency_traj_keep - 1];
-					
-					vector<double> sd = getFrenet(x, y, car_yaw, waypoints_x, waypoints_y);
+					vector<double> sd = getFrenet(x, y, deg2rad(car_yaw), waypoints_x, waypoints_y, waypoints_s);
 					
 					int closest_wp = ClosestWaypoint(x, y, waypoints_x, waypoints_y);
 					double waypoint_angle = atan2(waypoints_y[closest_wp + 1] - waypoints_y[closest_wp],
 												  waypoints_x[closest_wp + 1] - waypoints_x[closest_wp]);
-					double frenet_angle = car_yaw - waypoint_angle;
-					double ds = car_speed * sin(frenet_angle);
-					double dd = car_speed * -cos(frenet_angle);
+					double frenet_angle = deg2rad(car_yaw) - waypoint_angle;
+					double ds = mph2mps(car_speed) * cos(frenet_angle);
+					double dd = mph2mps(car_speed) * sin(frenet_angle);
 					
 					cur_s = sd[0];
 					cur_ds = ds;
@@ -596,11 +612,9 @@ int main() {
 					cur_dd = dd;
 					cur_ddd = ps.last_traj_ddd;
 					
-					pred_duration = ps.emergency_change_duration;
-					target_ds = cur_ds * (1 - ps.emergency_speed_change);
-					target_dds = -0.5 * ps.max_accel;
-					
-					printf("!!! safety emergency\n");
+					pred_duration = ps.safety_change_duration;
+					target_dds = 0;
+					target_ds = cur_ds * (1 - ps.safety_speed_change);
 				}
 				else if (ps.current_status == BehaviorStatus::Start)
 				{
@@ -623,19 +637,20 @@ int main() {
 					pred_duration = ps.lane_keep_duration;
 					target_dds = 0;
 					
-					// match speed to preceding car
-					if (lane_preceding_s_dist[ps.target_lane_id] < ps.lane_change_distance)
+					// emergency
+					if (lane_preceding_s_dist[ps.target_lane_id] < ps.safety_distance)
 					{
 						double prec_ds = lane_preceding_ds[ps.target_lane_id];
-						
-						if (prec_ds > cur_ds)
-						{
-							target_ds = min(prec_ds, (1 + ps.lane_keep_speed_change) * cur_ds);
-						}
-						else
-						{
-							target_ds = max(prec_ds, (1 - ps.lane_keep_speed_change) * cur_ds);
-						}
+						target_ds = max(prec_ds, (1 - ps.safety_speed_change) * cur_ds);
+
+						// printf("target_ds: %f\n", target_ds);
+						printf("!!! safety emergency !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+					}
+					// match speed to preceding car
+					else if (lane_preceding_s_dist[ps.target_lane_id] < ps.lane_change_distance)
+					{
+						double prec_ds = lane_preceding_ds[ps.target_lane_id];
+						target_ds = (1 - ps.lane_keep_speed_change) * cur_ds;
 
 						printf("!!!!!!!!! need lane change\n");
 					}
@@ -677,7 +692,7 @@ int main() {
 			int num_traj = 0;
 			
 			{
-				num_prev_path = emergency ? ps.num_emergency_traj_keep : previous_path_x.size();
+				num_prev_path = previous_path_x.size();
 				
 				// use remaining points from previous path
 				for (int i = 0; i < num_prev_path; ++i)
@@ -710,7 +725,7 @@ int main() {
 						double waypoint_angle = atan2(waypoints_y[closest_wp + 1] - waypoints_y[closest_wp],
 													  waypoints_x[closest_wp + 1] - waypoints_x[closest_wp]);
 						
-						vector<double> sd = getFrenet(x, y, waypoint_angle, waypoints_x, waypoints_y);
+						vector<double> sd = getFrenet(x, y, waypoint_angle, waypoints_x, waypoints_y, waypoints_s);
 						
 //						printf("old traj sd: %f %f\n", sd[0], sd[1]);
 //						printf("old traj xy: %f %f\n", (double)x, (double)y);
@@ -749,6 +764,7 @@ int main() {
 				printf("remaining count: %d\n", num_prev_path);
 				printf("predicted count: %d\n", num_traj);
 				printf("\n");
+				printf("------------------------------------------------\n");
 			}
 			
 			{
