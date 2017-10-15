@@ -1,5 +1,9 @@
 # Path Planning
 
+<p align="center">
+  <img src="./data/pp-demo-1.gif" width="640">
+</p>
+
 ### Scenario
 
 * In lane
@@ -23,8 +27,7 @@
 
 ---
 
-# CarND-Path-Planning-Project
-Self-Driving Car Engineer Nanodegree Program
+## Given readme contents from Udacity
    
 ### Simulator.
 You can download the Term3 Simulator which contains the Path Planning Project from the [releases tab (https://github.com/udacity/self-driving-car-sim/releases).
