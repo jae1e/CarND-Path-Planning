@@ -12,6 +12,11 @@ The distance between two given waypoints is about 30 meter which is not enough t
 ### Lane status check
 Status of each lane, if the lane is busy or free to go, is checked before making decision. Not only the lane status at the current time frame but also predicted status at the possible lane change time frame is checked. From sensor fusion information, I predicted other cars' position at certain time frames. If any car is placed within safety range of the ego car in any time frame, the lane on which car is placed is marked as busy.
 
+### Target lane decision
+I used two constraints for target lane decision. First, whether the lane is busy or not, and second, how far ego car can make if the lane is selected. First constraint gives binary decision that busy lane cannot be selected at all. Among the free lanes, the lane which ensures further possible distance is selected. But even if the new target lane can open up further distance, still the lane change takes  chance of incident. So I assigned panelty to the lanes which is not current lane.
+
+
+
 ---
 
 ## Udacity README
