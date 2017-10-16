@@ -483,7 +483,8 @@ int main() {
 					double x = sfit->at(1), y = sfit->at(2);
 					double vx = sfit->at(3), vy = sfit->at(4);
 					double v = sqrt(vx * vx + vy * vy);
-					double s = sfit->at(5), d = sfit->at(6);
+					double s = (double)sfit->at(5) + ps.num_cycle * ps.len_track_s;
+					double d = sfit->at(6);
 					double yaw = atan2(vy, vx);
 					
 					int closest_wp = ClosestWaypoint(x, y, waypoints_x, waypoints_y);
