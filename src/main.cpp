@@ -196,7 +196,7 @@ public: // general parameters
 	
 	int num_lanes = 3;
 	
-	double accel_coeff = 0.6; // velocity quickly converges when the value goes high
+	double accel_coeff = 0.5; // velocity quickly converges when the value goes high
 	
 public: // start parameters
 	double start_duration = 5.0;
@@ -221,7 +221,7 @@ public: // lane change parameters
 	
 	double lane_change_distance = 60.0;
 
-	double lane_change_speed_decay = 0.1;
+	double lane_change_speed_decay = 0.2;
 	
 	double lane_change_cost_coeff = 1.2;
 
@@ -690,11 +690,11 @@ int main() {
 						if (prec_ds > cur_ds)
 						{
 							target_ds = min(ps.max_speed, 
-											min(prec_ds, (1 + ps.safety_speed_change) * cur_ds));
+											min(prec_ds, (1 + ps.lane_keep_speed_change) * cur_ds));
 						}
 						else
 						{
-							target_ds = max(prec_ds, (1 - ps.safety_speed_change) * cur_ds);
+							target_ds = max(prec_ds, (1 - ps.lane_keep_speed_change) * cur_ds);
 							ds_decreased = true;
 						}
 
