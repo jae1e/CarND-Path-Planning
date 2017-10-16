@@ -615,6 +615,8 @@ int main() {
 					pred_duration = ps.safety_change_duration;
 					target_dds = 0;
 					target_ds = cur_ds * (1 - ps.safety_speed_change);
+
+					printf("status: car detected within safety range\n");
 				}
 				else if (ps.current_status == BehaviorStatus::Start)
 				{
@@ -622,7 +624,7 @@ int main() {
 					target_dds = 0;
 					target_ds = ps.start_speed;
 
-					printf("!!! start\n");
+					printf("status: starting\n");
 				}
 				else if (ps.current_status == BehaviorStatus::ChangeLane)
 				{
@@ -630,7 +632,7 @@ int main() {
 					target_dds = 0;
 					target_ds = cur_ds * (1.0 - ps.lane_change_speed_decay);
 
-					printf("!!! change lane\n");
+					printf("status: changing lane\n");
 				}
 				else // if (ps.current_status == BehaviorStatus::KeepLane)
 				{
@@ -644,7 +646,7 @@ int main() {
 						target_ds = max(prec_ds, (1 - ps.safety_speed_change) * cur_ds);
 
 						// printf("target_ds: %f\n", target_ds);
-						printf("!!! safety emergency !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+						printf("status: car detected within safety range 2\n");
 					}
 					// match speed to preceding car
 					else if (lane_preceding_s_dist[ps.target_lane_id] < ps.lane_change_distance)
@@ -652,7 +654,7 @@ int main() {
 						double prec_ds = lane_preceding_ds[ps.target_lane_id];
 						target_ds = (1 - ps.lane_keep_speed_change) * cur_ds;
 
-						printf("!!!!!!!!! need lane change\n");
+						printf("status: need lane change\n");
 					}
 					// match speed to maximum speed
 					else
@@ -667,7 +669,7 @@ int main() {
 							target_ds = max(target_speed, (1 - ps.lane_keep_speed_change) * cur_ds);
 						}
 
-						printf("!!! go max\n");
+						printf("status: free to go\n");
 					}
 				}
 				
