@@ -191,14 +191,12 @@ public: // general parameters
 	double max_accel = 8.0;
 	
 	double max_speed = 20; // 50 MPH = 22.352 m/s;
-
-	double max_d_comp_curve_angle = pi() / 5; // maximum compensation curve angle
 	
 	double lane_width = 4.0;
 	
 	int num_lanes = 3;
 	
-	double accel_coeff = 0.8; // velocity quickly converges when the value goes high
+	double accel_coeff = 0.6; // velocity quickly converges when the value goes high
 	
 public: // start parameters
 	double start_duration = 5.0;
@@ -210,7 +208,9 @@ public: // lane keep parameters
 	
 	double lane_keep_speed_change = 0.1;
 
-	double max_curve_speed_change = 0.2;
+	double max_d_comp_curve_angle = pi() / 5; // maximum compensation curve angle
+
+	double max_curve_speed_change = 0.1;
 
 	double ds_curve_comp_coeff = 3.0;
 
@@ -219,22 +219,22 @@ public: // lane keep parameters
 public: // lane change parameters
 	double lane_change_duration = 3.0;
 	
-	double lane_change_distance = 50.0;
+	double lane_change_distance = 60.0;
 
-	double lane_change_speed_decay = 0.15;
+	double lane_change_speed_decay = 0.1;
 	
 	double lane_change_cost_coeff = 1.2;
 
-	double lane_change_front_safety_distance = 50.0;
+	double lane_change_front_safety_distance = 40.0;
 
-	double lane_change_back_safety_distance = 30.0;
+	double lane_change_back_safety_distance = 20.0;
 	
 public: // safety parameters
 	double safety_change_duration = 3.0;
 
-	double safety_distance = 20.0;
+	double safety_distance = 25.0;
 
-	double safety_speed_change = 0.4;
+	double safety_speed_change = 0.3;
 
 public: // interpoaltion parameters
 	int num_src_waypoints = 10;
@@ -649,6 +649,8 @@ int main() {
 				target_dd = 0;
 				target_d = (0.5 + ps.target_lane_id) * ps.lane_width;
 
+				bool ds_decreased = false;
+
 				// calculate target s info
 				if (ps.current_status == BehaviorStatus::Start)
 				{
@@ -675,7 +677,8 @@ int main() {
 					if (lane_preceding_s_dist[ps.target_lane_id] < ps.safety_distance)
 					{
 						double prec_ds = lane_preceding_ds[ps.target_lane_id];
-						target_ds = max(prec_ds, (1 - ps.safety_speed_change) * cur_ds);
+						target_ds = (1 - ps.safety_speed_change) * cur_ds;
+						ds_decreased = true;
 
 						// printf("target_ds: %f\n", target_ds);
 						printf("status: car detected within safety range\n");
@@ -684,7 +687,17 @@ int main() {
 					else if (lane_preceding_s_dist[ps.target_lane_id] < ps.lane_change_distance)
 					{
 						double prec_ds = lane_preceding_ds[ps.target_lane_id];
-						target_ds = (1 - ps.lane_keep_speed_change) * cur_ds;
+						if (prec_ds > cur_ds)
+						{
+							target_ds = min(prec_ds, (1 + ps.safety_speed_change) * cur_ds);
+						}
+						else
+						{
+							target_ds = max(prec_ds, (1 - ps.safety_speed_change) * cur_ds);
+							ds_decreased = true;
+						}
+
+						ds_decreased = true;
 
 						printf("status: need lane change\n");
 					}
@@ -699,6 +712,7 @@ int main() {
 						else
 						{
 							target_ds = max(target_speed, (1 - ps.lane_keep_speed_change) * cur_ds);
+							ds_decreased = true;
 						}
 
 						printf("status: free to go\n");
@@ -706,7 +720,7 @@ int main() {
 				}
 
 				// calculate angle difference of previous path to prepare upcoming curve
-				if (previous_path_x.size() > 1)
+				if (previous_path_x.size() > 1 && !ds_decreased)
 				{
 					double x0 = previous_path_x.front();
 					double y0 = previous_path_y.front();
