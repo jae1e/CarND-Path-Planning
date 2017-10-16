@@ -689,7 +689,8 @@ int main() {
 						double prec_ds = lane_preceding_ds[ps.target_lane_id];
 						if (prec_ds > cur_ds)
 						{
-							target_ds = min(prec_ds, (1 + ps.safety_speed_change) * cur_ds);
+							target_ds = min(ps.max_speed, 
+											min(prec_ds, (1 + ps.safety_speed_change) * cur_ds));
 						}
 						else
 						{
@@ -707,7 +708,8 @@ int main() {
 						double target_speed = ps.max_speed;
 						if (target_speed > cur_ds)
 						{
-							target_ds = min(target_speed, (1 + ps.lane_keep_speed_change) * cur_ds);
+							target_ds = min(ps.max_speed, 
+											min(target_speed, (1 + ps.lane_keep_speed_change) * cur_ds));
 						}
 						else
 						{
