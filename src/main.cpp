@@ -234,7 +234,7 @@ public: // safety parameters
 
 	double safety_distance = 20.0;
 
-	double safety_speed_change = 0.3;
+	double safety_speed_change = 0.4;
 
 public: // interpoaltion parameters
 	int num_src_waypoints = 10;
