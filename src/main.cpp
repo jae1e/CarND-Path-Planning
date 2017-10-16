@@ -190,7 +190,7 @@ public: // general parameters
 	
 	double max_accel = 8.0;
 	
-	double max_speed = 20; // 50 MPH = 22.352 m/s;
+	double max_speed = 21; // 50 MPH = 22.352 m/s;
 	
 	double lane_width = 4.0;
 	
