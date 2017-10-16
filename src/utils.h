@@ -21,8 +21,28 @@ namespace
 {
 namespace Utils
 {
-	
-void interpolatePoints(vector<double> along_points, vector<double> input_points, int ratio, vector<double>& output_points)
+
+double normalizeAngle(double angle)
+{
+	while (angle > M_PI)
+	{
+		angle -= 2 * M_PI;
+	}
+	while (angle < -M_PI)
+	{
+		angle += 2 * M_PI;
+	}
+	return angle;
+}
+
+double frenetAngle(double car_yaw, double waypoint_angle)
+{
+	double ncy = normalizeAngle(car_yaw);
+	double nwa = normalizeAngle(waypoint_angle);
+	return normalizeAngle(car_yaw - waypoint_angle);
+}
+
+void interpolatePoints(const vector<double>& along_points, const vector<double>& input_points, int ratio, vector<double>& output_points)
 {
 	output_points.clear();
 	
@@ -152,7 +172,7 @@ double efficientDistance(double start_pos, double start_speed, double target_spe
 	return start_pos + (start_speed + alpha * (target_speed - start_speed)) * T;
 }
 
-vector<double> jerkMinimizingCoeffs(vector< double> start, vector <double> end, double T)
+vector<double> jerkMinimizingCoeffs(const vector<double>& start, const vector<double>& end, double T)
 {
 	/*
 	Calculate the Jerk Minimizing Trajectory that connects the initial state
@@ -202,7 +222,7 @@ vector<double> jerkMinimizingCoeffs(vector< double> start, vector <double> end, 
 
 }
 
-vector<double> jerkMinimizingTrajectory(vector<double> cur_info, vector<double> tgt_info, 
+vector<double> jerkMinimizingTrajectory(const vector<double>& cur_info, const vector<double>& tgt_info, 
 										int num_trajectory, double pred_dt, double iter_dt)
 {
 	vector<double> traj(num_trajectory);
