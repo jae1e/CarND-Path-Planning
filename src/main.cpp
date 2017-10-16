@@ -210,7 +210,7 @@ public: // lane keep parameters
 
 	double max_d_comp_curve_angle = pi() / 9; // maximum compensation curve angle
 
-	double lane_curve_duration = 1.8;
+	double lane_curve_duration = 2.0;
 
 	double max_curve_speed_change = 0.15;
 
