@@ -675,7 +675,7 @@ int main() {
 					// emergency
 					if (lane_preceding_s_dist[ps.target_lane_id] < ps.safety_distance)
 					{
-						pred_duration = ps.safety_change_duration
+						pred_duration = ps.safety_change_duration;
 
 						double prec_ds = lane_preceding_ds[ps.target_lane_id];
 						target_ds = (1 - ps.safety_speed_change) * cur_ds;
