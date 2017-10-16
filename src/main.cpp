@@ -221,7 +221,7 @@ public: // lane change parameters
 	
 	double lane_change_distance = 60.0;
 
-	double lane_change_speed_decay = 0.2;
+	double lane_change_speed_decay = 0.15;
 	
 	double lane_change_cost_coeff = 1.2;
 
