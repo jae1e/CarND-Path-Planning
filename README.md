@@ -16,7 +16,13 @@ Status of each lane, if the lane is busy or free to go, is checked before making
 I used two constraints for target lane decision. First, whether the lane is busy or not, and second, how far ego car can make if the lane is selected. First constraint gives binary decision that busy lane cannot be selected at all. Among the free lanes, the lane which ensures further possible distance is selected. But even if the new target lane can open up further distance, still the lane change takes  chance of incident. So I assigned panelty to the lanes which is not current lane.
 
 ### Trajectory generation
-Following lane decision, jerk minimized trajectory (JMT) is generated, since JMT gives smooth trajectory with stable acceleration and decceleration. Assuming that jerk is following second order polynomial function of time, I calculated velocity and position profile is calculated. JMTs along both S and D direction are generated and converted to XY trajectories using interpolated waypoints.
+Following lane decision, jerk minimized trajectory (JMT) is generated, since JMT gives smooth trajectory with stable acceleration and decceleration. Assuming that jerk is following second order polynomial function of time, I calculated position, velocity and accelration profile with following equation.
+
+<p align="center">
+  <img src="./data/jmt.png" width="328">
+</p>
+
+JMTs along both S and D direction are generated and converted to XY trajectories using interpolated waypoints.
 
 ---
 
