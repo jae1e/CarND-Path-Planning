@@ -206,22 +206,22 @@ public: // start parameters
 public: // lane keep parameters
 	double lane_keep_duration = 1.0;
 	
-	double lane_keep_speed_change = 0.12;
+	double lane_keep_speed_change = 0.11;
 
-	double max_d_comp_curve_angle = pi() / 5; // maximum compensation curve angle
+	double max_d_comp_curve_angle = pi() / 6; // maximum compensation curve angle
 
-	double max_curve_speed_change = 0.12;
+	double max_curve_speed_change = 0.11;
 
 	double ds_curve_comp_coeff = 3.0;
 
-	double d_curve_comp_coeff = 0.2;
+	double d_curve_comp_coeff = 0.4;
 		
 public: // lane change parameters
 	double lane_change_duration = 3.0;
 	
 	double lane_change_distance = 60.0;
 
-	double lane_change_speed_decay = 0.1;
+	double lane_change_speed_decay = 0.2;
 	
 	double lane_change_cost_coeff = 1.2;
 
@@ -367,7 +367,7 @@ int main() {
           	vector<double> next_x_vals;
           	vector<double> next_y_vals;
 
-			printf("------------------------------------------------\n");
+			printf("-------------------------------------------\n");
 			printf("\n");
 			printf("------------------\n");
 			printf(" current car info\n");
@@ -740,7 +740,7 @@ int main() {
 					double angle1 = atan2(waypoints_y[wp1 + 1] - waypoints_y[wp1],
 											waypoints_x[wp1 + 1] - waypoints_x[wp1]);
 					double angle_diff = Utils::normalizeAngle(angle1 - angle0);
-					//printf("angle diff: %f\n", angle_diff);
+					printf("angle diff: %f\n", angle_diff);
 
 					// target d compensation according to angle difference, not to go out of the lane
 					double d_comp_angle = abs(angle_diff) < abs(ps.max_d_comp_curve_angle) ? angle_diff : ps.max_d_comp_curve_angle;
@@ -842,7 +842,7 @@ int main() {
 				printf("remaining count: %d\n", num_prev_path);
 				printf("predicted count: %d\n", num_traj);
 				printf("\n");
-				printf("------------------------------------------------\n");
+				printf("-------------------------------------------\n");
 			}
 			
 			{
