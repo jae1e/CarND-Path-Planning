@@ -4,30 +4,22 @@
   <img src="./data/pp-demo-1.gif" width="640">
 </p>
 
-### Scenario
+## How it works
 
-* In lane
-   1. acceleration never exceeds a_max
-   2. d is always in d_lane_min and d_lane_max
-   3. keep lane center with 1/(1+exp(-(d-d_center)^2))
-   4. speed never exceeds v_max
-   5. keep distance with preceding vehicle with 1/(1+exp(-(s_preceding-s-target_delta_s)^2)) (s_preceding-s goes very large when there is no car)
-   6. if s_preceding-s hits target_delta_s, try lange shift
-   
-* Check lane shift
-   1. Check possible lanes (i.e., only lane 2 is available when ego car is on lane 1)
-   2. If s_preceding-s of other lanes is larger than s_preceding-s of current lane, set generate trajectory
-   3. if trajectory possible trajectory exists in prediction time frames, go for it!
-   
-* Lane shift
-   1. Mark predicted position of cars in prediction time frames
-   2. Generate trajectory with A*
-   3. Execute lane shift
-   4. When car gets into the target lane, run In lane scenario
+### Waypoint interpolation
+The distance between two given waypoints is about 30 meter which is not enough to run the car smoothly. In every iteration, I interpolated the waypoints nearby the car to make the interval of the waypoints sub-meter scale. Interpolated waypoints are provided to function calculating the closest and next waypoint.
+
+### Lane status check
+Status of each lane, if the lane is busy or free to go, is checked before making decision. Not only the lane status at the current time frame but also predicted status at the possible lane change time frame is checked. From sensor fusion information, I predicted other cars' position at certain time frames. If any car is placed within safety range of the ego car in any time frame, the lane on which car is placed is marked as busy.
+
+### Target lane decision
+I used two constraints for target lane decision. First, whether the lane is busy or not, and second, how far ego car can make if the lane is selected. First constraint gives binary decision that busy lane cannot be selected at all. Among the free lanes, the lane which ensures further possible distance is selected. But even if the new target lane can open up further distance, still the lane change takes  chance of incident. So I assigned panelty to the lanes which is not current lane.
+
+
 
 ---
 
-## Given readme contents from Udacity
+## Udacity README
    
 ### Simulator.
 You can download the Term3 Simulator which contains the Path Planning Project from the [releases tab (https://github.com/udacity/self-driving-car-sim/releases).
