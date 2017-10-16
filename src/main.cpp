@@ -225,9 +225,9 @@ public: // lane change parameters
 	
 	double lane_change_cost_coeff = 1.2;
 
-	double lane_change_front_safety_distance = 40.0;
+	double lane_change_front_safety_distance = 20.0;
 
-	double lane_change_back_safety_distance = 20.0;
+	double lane_change_back_safety_distance = 10.0;
 	
 public: // safety parameters
 	double safety_change_duration = 3.0;
@@ -670,12 +670,13 @@ int main() {
 				}
 				else // if (ps.current_status == BehaviorStatus::KeepLane)
 				{
-					pred_duration = ps.lane_keep_duration;
 					target_dds = 0;
 					
 					// emergency
 					if (lane_preceding_s_dist[ps.target_lane_id] < ps.safety_distance)
 					{
+						pred_duration = ps.safety_change_duration
+
 						double prec_ds = lane_preceding_ds[ps.target_lane_id];
 						target_ds = (1 - ps.safety_speed_change) * cur_ds;
 						ds_decreased = true;
@@ -686,6 +687,8 @@ int main() {
 					// match speed to preceding car
 					else if (lane_preceding_s_dist[ps.target_lane_id] < ps.lane_change_distance)
 					{
+						pred_duration = ps.lane_keep_duration;
+
 						double prec_ds = lane_preceding_ds[ps.target_lane_id];
 						if (prec_ds > cur_ds)
 						{
@@ -705,6 +708,8 @@ int main() {
 					// match speed to maximum speed
 					else
 					{
+						pred_duration = ps.lane_keep_duration;
+
 						double target_speed = ps.max_speed;
 						if (target_speed > cur_ds)
 						{
