@@ -190,7 +190,7 @@ public: // general parameters
 	
 	double max_accel = 8.0;
 	
-	double max_speed = 20.5; // 50 MPH = 22.352 m/s;
+	double max_speed = 20.0; // 50 MPH = 22.352 m/s;
 	
 	double lane_width = 4.0;
 	
@@ -206,13 +206,15 @@ public: // start parameters
 public: // lane keep parameters
 	double lane_keep_duration = 1.0;
 	
-	double lane_keep_speed_change = 0.11;
+	double lane_keep_speed_change = 0.1;
 
-	double max_d_comp_curve_angle = pi() / 6; // maximum compensation curve angle
+	double max_d_comp_curve_angle = pi() / 9; // maximum compensation curve angle
 
-	double max_curve_speed_change = 0.11;
+	double lane_curve_duration = 1.8;
 
-	double ds_curve_comp_coeff = 3.0;
+	double max_curve_speed_change = 0.15;
+
+	double ds_curve_comp_coeff = 5.0;
 
 	double d_curve_comp_coeff = 0.4;
 		
@@ -221,7 +223,7 @@ public: // lane change parameters
 	
 	double lane_change_distance = 60.0;
 
-	double lane_change_speed_decay = 0.2;
+	double lane_change_speed_decay = 0.1;
 	
 	double lane_change_cost_coeff = 1.2;
 
@@ -665,6 +667,7 @@ int main() {
 					pred_duration = ps.lane_change_duration;
 					target_dds = 0;
 					target_ds = cur_ds * (1.0 - ps.lane_change_speed_decay);
+					ds_decreased = true;
 
 					printf("status: changing lane\n");
 				}
@@ -727,7 +730,7 @@ int main() {
 				}
 
 				// calculate angle difference of previous path to prepare upcoming curve
-				if (previous_path_x.size() > 1 && !ds_decreased)
+				if (previous_path_x.size() > 1)
 				{
 					double x0 = previous_path_x.front();
 					double y0 = previous_path_y.front();
@@ -739,17 +742,31 @@ int main() {
 											waypoints_x[wp0 + 1] - waypoints_x[wp0]);
 					double angle1 = atan2(waypoints_y[wp1 + 1] - waypoints_y[wp1],
 											waypoints_x[wp1 + 1] - waypoints_x[wp1]);
-					double angle_diff = Utils::normalizeAngle(angle1 - angle0);
+					double angle_diff = Utils::normalizeAngle(angle0 - angle1);
 					printf("angle diff: %f\n", angle_diff);
 
 					// target d compensation according to angle difference, not to go out of the lane
 					double d_comp_angle = abs(angle_diff) < abs(ps.max_d_comp_curve_angle) ? angle_diff : ps.max_d_comp_curve_angle;
 					target_d += ps.d_curve_comp_coeff * (d_comp_angle / ps.max_d_comp_curve_angle) * ps.lane_width;
 
-					// target ds compensation according to angle difference, not to exceed max speed
-					double ds_comp = max(1 - ps.max_curve_speed_change, cos(ps.ds_curve_comp_coeff * angle_diff));
-					//printf("target ds comp: %f %f \n", target_ds, ds_comp);
-					target_ds = target_ds * ds_comp;
+					if (!ds_decreased)
+					{
+						double ds_comp = cos(ps.ds_curve_comp_coeff * angle_diff);
+						if (ds_comp < 1 - ps.lane_keep_speed_change)
+						{
+							pred_duration = ps.lane_curve_duration;
+							double ds_comp = max(1 - ps.max_curve_speed_change, ds_comp);
+							printf("1\n");
+						}
+						else
+						{
+							pred_duration = ps.lane_keep_duration;
+							double ds_comp = ds_comp;
+						}
+
+						//printf("target ds comp: %f %f \n", target_ds, ds_comp);
+						target_ds = target_ds * ds_comp;
+					}
 				}
 
 				// calculate efficient target s
