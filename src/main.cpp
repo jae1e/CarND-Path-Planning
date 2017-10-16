@@ -756,7 +756,6 @@ int main() {
 						{
 							pred_duration = ps.lane_curve_duration;
 							double ds_comp = max(1 - ps.max_curve_speed_change, ds_comp);
-							printf("1\n");
 						}
 						else
 						{
