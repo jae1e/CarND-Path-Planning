@@ -24,11 +24,11 @@ Following lane decision, jerk minimized trajectory (JMT) is generated, since JMT
 
 JMTs along both S and D direction are generated and converted to XY trajectories using interpolated waypoints.
 
-### S velocity compensation
-While running on curved track or changing lane, s velocity should be decreased to run stably. S velocity compensation is applied according to the difference of car yaw and waypoint angle.
-
 ### D position compensation
-While running on curved track, car gets centrifugal force which is pushing car outward of track. D position compensation is applied according to the difference of car yaw and waypoint angle toward inner position than the lane center, not to be pushed out of the lane.
+While running on curved track, car gets centrifugal force which is pushing car outward of track. D position compensation is applied  before car enters curved track, according to the difference of car yaw and waypoint angle. Car targets inner D position than the lane center, not to be pushed out of the lane.
+
+### S velocity compensation
+While running on curved track or changing lane, s velocity should be decreased to run stably. S velocity compensation is applied before the car makes turn, according to the difference of car yaw and waypoint angle.
 
 ---
 
