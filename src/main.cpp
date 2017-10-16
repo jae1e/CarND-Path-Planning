@@ -206,11 +206,11 @@ public: // start parameters
 public: // lane keep parameters
 	double lane_keep_duration = 1.0;
 	
-	double lane_keep_speed_change = 0.1;
+	double lane_keep_speed_change = 0.12;
 
 	double max_d_comp_curve_angle = pi() / 5; // maximum compensation curve angle
 
-	double max_curve_speed_change = 0.1;
+	double max_curve_speed_change = 0.12;
 
 	double ds_curve_comp_coeff = 3.0;
 
