@@ -225,16 +225,16 @@ public: // lane change parameters
 	
 	double lane_change_cost_coeff = 1.2;
 
-	double lane_change_front_safety_distance = 30.0;
+	double lane_change_front_safety_distance = 50.0;
 
-	double lane_change_back_safety_distance = 20.0;
+	double lane_change_back_safety_distance = 30.0;
 	
 public: // safety parameters
 	double safety_change_duration = 3.0;
 
-	double safety_distance = 15.0;
+	double safety_distance = 20.0;
 
-	double safety_speed_change = 0.25;
+	double safety_speed_change = 0.3;
 
 public: // interpoaltion parameters
 	int num_src_waypoints = 10;
