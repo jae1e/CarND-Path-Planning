@@ -252,7 +252,7 @@ public: // start parameters
 	double start_speed = 12.0;
 	
 public: // lane keep parameters
-	double lane_keep_duration = 0.5;
+	double lane_keep_duration = 0.75;
 	
 	double lane_keep_speed_change = 0.025;
 
