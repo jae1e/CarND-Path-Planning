@@ -264,7 +264,7 @@ public: // lane keep parameters
 
 	double d_curve_comp_coeff = 0.8;
 
-	double max_d_deviation = 0.9;
+	double max_d_deviation = 0.5;
 		
 public: // lane change parameters
 	double lane_change_duration = 3.0;
@@ -795,25 +795,23 @@ int main() {
 
 					double target_lane_d = (0.5 + ps.current_lane_id) * ps.lane_width;
 					// prevent outside lane
-					if (ps.current_status == BehaviorStatus::KeepLane 
-						&& ((ps.target_lane_id == 2 && cur_d - target_lane_d > ps.max_d_deviation)
-							|| (ps.target_lane_id == 0 && target_lane_d - cur_d > ps.max_d_deviation)))
+					if (ps.current_status == BehaviorStatus::KeepLane)
 					{
-						pred_duration = max(pred_duration, ps.lane_curve_duration);
+						if (abs(cur_d - target_lane_d) > ps.max_d_deviation)
+						{
+							pred_duration = max(pred_duration, ps.lane_curve_duration);
 
-						target_d = target_lane_d + 0.5 * (target_lane_d - cur_d);
+							target_d = target_lane_d + 0.5 * (target_lane_d - cur_d);
+						}
+						else if (abs(cur_d - target_lane_d) > 0.5 * ps.max_d_deviation)
+						{
+							double angle_sign = angle_diff > 0 ? 1 : -1;
+							double d_comp_angle = abs(angle_diff) < ps.max_d_comp_curve_angle ? abs(angle_diff) : ps.max_d_comp_curve_angle;
+							d_comp_angle *= angle_sign;
+							target_d += ps.d_curve_comp_coeff * (d_comp_angle / ps.max_d_comp_curve_angle) * ps.lane_width;
+						}
 					}
-					// target d compensation according to angle difference, not to go out of the lane
-					else if (abs(cur_d - target_lane_d) > 0.5 * ps.max_d_deviation)
-					{
-						pred_duration = max(pred_duration, ps.lane_curve_duration);
-
-						double angle_sign = angle_diff > 0 ? 1 : -1;
-						double d_comp_angle = abs(angle_diff) < ps.max_d_comp_curve_angle ? abs(angle_diff) : ps.max_d_comp_curve_angle;
-						d_comp_angle *= angle_sign;
-						target_d += ps.d_curve_comp_coeff * (d_comp_angle / ps.max_d_comp_curve_angle) * ps.lane_width;
-					}
-
+					
 					if (!ds_decreased)
 					{
 						double ds_comp = cos(ps.ds_curve_comp_coeff * angle_diff);
