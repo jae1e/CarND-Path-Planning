@@ -258,7 +258,7 @@ public: // lane keep parameters
 
 	double max_d_comp_curve_angle = pi() / 8; // maximum compensation curve angle
 
-	double lane_curve_duration = 1.5;
+	double lane_curve_duration = 1.0;
 
 	double ds_curve_comp_coeff = 5.0;
 
@@ -289,7 +289,7 @@ public: // safety parameters
 public: // interpoaltion parameters
 	int num_src_waypoints = 10;
 	
-	double interpolation_interval = 0.5;
+	double interpolation_interval = 0.2;
 	
 public: // status parameters
 	int num_cycle = 0;
