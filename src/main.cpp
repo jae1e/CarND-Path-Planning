@@ -269,7 +269,7 @@ public: // lane keep parameters
 	double max_d_deviation = 0.9;
 		
 public: // lane change parameters
-	double lane_change_duration = 2.0;
+	double lane_change_duration = 3.0;
 	
 	double lane_change_distance = 50.0;
 
