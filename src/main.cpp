@@ -258,7 +258,7 @@ public: // lane keep parameters
 
 	double max_d_comp_curve_angle = pi() / 8; // maximum compensation curve angle
 
-	double lane_curve_duration = 0.5;
+	double lane_curve_duration = 1.0;
 
 	double max_curve_speed_change = 0.025;
 
@@ -797,7 +797,9 @@ int main() {
 
 					double target_lane_d = (0.5 + ps.current_lane_id) * ps.lane_width;
 					// prevent outside lane
-					if (ps.current_status == BehaviorStatus::KeepLane && abs(target_lane_d - cur_d) > ps.max_d_deviation)
+					if (ps.current_status == BehaviorStatus::KeepLane 
+						&& ((ps.target_lane_id == 2 && cur_d - target_lane_d > ps.max_d_deviation)
+							|| (ps.target_lane_id == 0 && target_lane_d - cur_d > ps.max_d_deviation)))
 					{
 						target_d = target_lane_d + 0.5 * (target_lane_d - cur_d);
 					}
