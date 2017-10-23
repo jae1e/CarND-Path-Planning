@@ -252,13 +252,13 @@ public: // start parameters
 	double start_speed = 12.0;
 	
 public: // lane keep parameters
-	double lane_keep_duration = 1.0;
+	double lane_keep_duration = 0.5;
 	
 	double lane_keep_speed_change = 0.05;
 
 	double max_d_comp_curve_angle = pi() / 8; // maximum compensation curve angle
 
-	double lane_curve_duration = 1.0;
+	double lane_curve_duration = 0.5;
 
 	double max_curve_speed_change = 0.05;
 
@@ -269,11 +269,11 @@ public: // lane keep parameters
 	double max_d_deviation = 0.9;
 		
 public: // lane change parameters
-	double lane_change_duration = 3.0;
+	double lane_change_duration = 2.0;
 	
 	double lane_change_distance = 50.0;
 
-	double lane_change_speed_decay = 0.1;
+	double lane_change_speed_decay = 0.05;
 	
 	double lane_change_cost_coeff = 1.1;
 
@@ -282,11 +282,11 @@ public: // lane change parameters
 	double lane_change_back_safety_distance = 15.0;
 	
 public: // safety parameters
-	double safety_change_duration = 3.0;
+	double safety_change_duration = 2.0;
 
-	double safety_distance = 20.0;
+	double safety_distance = 15.0;
 
-	double safety_speed_change = 0.3;
+	double safety_speed_change = 0.2;
 
 public: // interpoaltion parameters
 	int num_src_waypoints = 10;
@@ -799,8 +799,7 @@ int main() {
 					// prevent outside lane
 					if (ps.current_status == BehaviorStatus::KeepLane && abs(target_lane_d - cur_d) > ps.max_d_deviation)
 					{
-						double d_sign = target_lane_d - cur_d > 0 ? 1 : -1;
-						target_d = target_lane_d + d_sign * 0.5 * ps.max_d_deviation;
+						target_d = target_lane_d + 0.5 * (target_lane_d - cur_d);
 					}
 					// target d compensation according to angle difference, not to go out of the lane
 					else
@@ -814,17 +813,6 @@ int main() {
 					if (!ds_decreased)
 					{
 						double ds_comp = cos(ps.ds_curve_comp_coeff * angle_diff);
-						if (ds_comp < 1 - ps.lane_keep_speed_change)
-						{
-							pred_duration = ps.lane_curve_duration;
-							double ds_comp = max(1 - ps.max_curve_speed_change, ds_comp);
-						}
-						else
-						{
-							pred_duration = ps.lane_keep_duration;
-							double ds_comp = ds_comp;
-						}
-
 						//printf("target ds comp: %f %f \n", target_ds, ds_comp);
 						target_ds = target_ds * ds_comp;
 					}
