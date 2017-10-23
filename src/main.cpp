@@ -252,15 +252,13 @@ public: // start parameters
 	double start_speed = 12.0;
 	
 public: // lane keep parameters
-	double lane_keep_duration = 1.0;
+	double lane_keep_duration = 0.5;
 	
-	double lane_keep_speed_change = 0.03;
+	double lane_keep_speed_change = 0.025;
 
 	double max_d_comp_curve_angle = pi() / 8; // maximum compensation curve angle
 
 	double lane_curve_duration = 1.0;
-
-	double max_curve_speed_change = 0.03;
 
 	double ds_curve_comp_coeff = 5.0;
 
@@ -801,6 +799,8 @@ int main() {
 						&& ((ps.target_lane_id == 2 && cur_d - target_lane_d > ps.max_d_deviation)
 							|| (ps.target_lane_id == 0 && target_lane_d - cur_d > ps.max_d_deviation)))
 					{
+						pred_duration = max(pred_duration, ps.lane_curve_duration);
+
 						target_d = target_lane_d + 0.5 * (target_lane_d - cur_d);
 					}
 					// target d compensation according to angle difference, not to go out of the lane
