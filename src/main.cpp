@@ -264,7 +264,7 @@ public: // lane keep parameters
 
 	double d_curve_comp_coeff = 0.8;
 
-	double max_d_deviation = 0.5;
+	double max_d_deviation = 0.4;
 		
 public: // lane change parameters
 	double lane_change_duration = 3.0;
