@@ -258,7 +258,7 @@ public: // lane keep parameters
 
 	double max_d_comp_curve_angle = pi() / 8; // maximum compensation curve angle
 
-	double lane_curve_duration = 1.0;
+	double lane_curve_duration = 1.5;
 
 	double ds_curve_comp_coeff = 5.0;
 
@@ -803,7 +803,7 @@ int main() {
 
 							target_d = target_lane_d + 0.5 * (target_lane_d - cur_d);
 						}
-						else if (abs(cur_d - target_lane_d) > 0.5 * ps.max_d_deviation)
+						else if (abs(cur_d - target_lane_d) > 0.3 * ps.max_d_deviation)
 						{
 							double angle_sign = angle_diff > 0 ? 1 : -1;
 							double d_comp_angle = abs(angle_diff) < ps.max_d_comp_curve_angle ? abs(angle_diff) : ps.max_d_comp_curve_angle;
@@ -811,7 +811,7 @@ int main() {
 							target_d += ps.d_curve_comp_coeff * (d_comp_angle / ps.max_d_comp_curve_angle) * ps.lane_width;
 						}
 					}
-					
+
 					if (!ds_decreased)
 					{
 						double ds_comp = cos(ps.ds_curve_comp_coeff * angle_diff);
