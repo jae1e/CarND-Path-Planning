@@ -265,6 +265,8 @@ public: // lane keep parameters
 	double ds_curve_comp_coeff = 5.0;
 
 	double d_curve_comp_coeff = 0.8;
+
+	double max_d_deviation = 0.9;
 		
 public: // lane change parameters
 	double lane_change_duration = 3.0;
@@ -777,7 +779,7 @@ int main() {
 					}
 				}
 
-				// calculate angle difference of previous path to prepare upcoming curve
+				// curve compensation
 				if (previous_path_x.size() > 1)
 				{
 					double x0 = previous_path_x.front();
@@ -793,11 +795,21 @@ int main() {
 					double angle_diff = Utils::normalizeAngle(angle0 - angle1);
 					// printf("angle diff: %f\n", angle_diff);
 
+					double target_lane_d = (0.5 + ps.current_lane_id) * ps.lane_width;
+					// prevent outside lane
+					if (ps.current_status == BehaviorStatus::KeepLane && abs(target_lane_d - cur_d) > ps.max_d_deviation)
+					{
+						double d_sign = target_lane_d - cur_d > 0 ? 1 : -1;
+						target_d = target_lane_d + d_sign * 0.5 * ps.max_d_deviation;
+					}
 					// target d compensation according to angle difference, not to go out of the lane
-					double angle_sign = angle_diff > 0 ? 1 : -1;
-					double d_comp_angle = abs(angle_diff) <ps.max_d_comp_curve_angle ? abs(angle_diff) : ps.max_d_comp_curve_angle;
-					d_comp_angle *= angle_sign;
-					target_d += ps.d_curve_comp_coeff * (d_comp_angle / ps.max_d_comp_curve_angle) * ps.lane_width;
+					else
+					{
+						double angle_sign = angle_diff > 0 ? 1 : -1;
+						double d_comp_angle = abs(angle_diff) <ps.max_d_comp_curve_angle ? abs(angle_diff) : ps.max_d_comp_curve_angle;
+						d_comp_angle *= angle_sign;
+						target_d += ps.d_curve_comp_coeff * (d_comp_angle / ps.max_d_comp_curve_angle) * ps.lane_width;
+					}
 
 					if (!ds_decreased)
 					{
