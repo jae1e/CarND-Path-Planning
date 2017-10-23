@@ -252,15 +252,15 @@ public: // start parameters
 	double start_speed = 12.0;
 	
 public: // lane keep parameters
-	double lane_keep_duration = 0.5;
+	double lane_keep_duration = 1.0;
 	
-	double lane_keep_speed_change = 0.025;
+	double lane_keep_speed_change = 0.03;
 
 	double max_d_comp_curve_angle = pi() / 8; // maximum compensation curve angle
 
 	double lane_curve_duration = 1.0;
 
-	double max_curve_speed_change = 0.025;
+	double max_curve_speed_change = 0.03;
 
 	double ds_curve_comp_coeff = 5.0;
 
@@ -807,7 +807,7 @@ int main() {
 					else
 					{
 						double angle_sign = angle_diff > 0 ? 1 : -1;
-						double d_comp_angle = abs(angle_diff) <ps.max_d_comp_curve_angle ? abs(angle_diff) : ps.max_d_comp_curve_angle;
+						double d_comp_angle = abs(angle_diff) < ps.max_d_comp_curve_angle ? abs(angle_diff) : ps.max_d_comp_curve_angle;
 						d_comp_angle *= angle_sign;
 						target_d += ps.d_curve_comp_coeff * (d_comp_angle / ps.max_d_comp_curve_angle) * ps.lane_width;
 					}
