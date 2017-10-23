@@ -800,9 +800,10 @@ int main() {
 						if (abs(cur_d - target_lane_d) > ps.max_d_deviation)
 						{
 							pred_duration = max(pred_duration, ps.lane_curve_duration);
-
-							target_d = target_lane_d + 0.5 * (target_lane_d - cur_d);
 						}
+
+						target_d = target_lane_d + 0.5 * (target_lane_d - cur_d);
+						
 						// else if (abs(cur_d - target_lane_d) > 0.3 * ps.max_d_deviation)
 						// {
 						// 	double angle_sign = angle_diff > 0 ? 1 : -1;
