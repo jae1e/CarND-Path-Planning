@@ -804,8 +804,10 @@ int main() {
 						target_d = target_lane_d + 0.5 * (target_lane_d - cur_d);
 					}
 					// target d compensation according to angle difference, not to go out of the lane
-					else
+					else if (abs(cur_d - target_lane_d) > 0.5 * ps.max_d_deviation)
 					{
+						pred_duration = max(pred_duration, ps.lane_curve_duration);
+
 						double angle_sign = angle_diff > 0 ? 1 : -1;
 						double d_comp_angle = abs(angle_diff) < ps.max_d_comp_curve_angle ? abs(angle_diff) : ps.max_d_comp_curve_angle;
 						d_comp_angle *= angle_sign;
