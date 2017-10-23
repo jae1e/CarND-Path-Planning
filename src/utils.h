@@ -42,7 +42,7 @@ double frenetAngle(double car_yaw, double waypoint_angle)
 	return normalizeAngle(car_yaw - waypoint_angle);
 }
 
-void interpolatePoints(const vector<double>& along_points, const vector<double>& input_points, int ratio, vector<double>& output_points)
+void interpolatePoints(const vector<double>& along_points, const vector<double>& input_points, double interval, vector<double>& output_points)
 {
 	output_points.clear();
 	
@@ -53,11 +53,11 @@ void interpolatePoints(const vector<double>& along_points, const vector<double>&
 	{
 		double p1 = along_points[i];
 		double p2 = along_points[i+1];
-		double dp = (p2 - p1) / ratio;
+		int num_points = (int)ceil((p2 - p1) / interval);
 		
-		for (int j = 0; j < ratio; ++j)
+		for (int j = 0; j < num_points; ++j)
 		{
-			output_points.push_back(spline(p1 + j * dp));
+			output_points.push_back(spline(p1 + j * interval));
 		}
 	}
 	
@@ -236,7 +236,7 @@ vector<double> jerkMinimizingTrajectory(const vector<double>& cur_info, const ve
 		double val = 0;
 		for (int ic = 0; ic < coeffs.size(); ++ic)
 		{
-			val += coeffs[ic] * pow((it + 1) * iter_dt, ic);
+			val += coeffs[ic] * pow(it * iter_dt, ic);
 		}
 
 		traj[it] = val;
