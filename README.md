@@ -1,5 +1,7 @@
 # Path Planning
 
+### [Full video on YouTube](https://youtu.be/FiJHgARBb2k)
+
 <p align="center">
   <img src="./data/pp-demo-1.gif" width="640">
 </p>
