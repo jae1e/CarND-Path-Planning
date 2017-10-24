@@ -242,7 +242,7 @@ public: // general parameters
 	
 	double lane_width = 4.0;
 
-	double end_lane_eps = 0.25;
+	double end_lane_eps = 0.15;
 	
 	int num_lanes = 3;
 	
