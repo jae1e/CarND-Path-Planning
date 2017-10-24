@@ -266,7 +266,7 @@ public: // lane keep parameters
 
 	double d_curve_comp_coeff = 0.8;
 
-	double max_d_deviation = 0.2;
+	double max_d_deviation = 0.15;
 		
 public: // lane change parameters
 	double lane_change_duration = 3.0;
@@ -279,7 +279,7 @@ public: // lane change parameters
 
 	double lane_change_front_safety_distance = 20.0;
 
-	double lane_change_back_safety_distance = 15.0;
+	double lane_change_back_safety_distance = 20.0;
 	
 public: // safety parameters
 	double safety_change_duration = 2.0;
