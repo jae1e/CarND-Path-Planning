@@ -277,9 +277,9 @@ public: // lane change parameters
 	
 	double lane_change_cost_coeff = 1.1;
 
-	double lane_change_front_safety_distance = 25.0;
+	double lane_change_front_safety_distance = 20.0;
 
-	double lane_change_back_safety_distance = 20.0;
+	double lane_change_back_safety_distance = 15.0;
 	
 public: // safety parameters
 	double safety_change_duration = 2.0;
