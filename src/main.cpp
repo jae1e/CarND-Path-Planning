@@ -242,7 +242,7 @@ public: // general parameters
 	
 	double lane_width = 4.0;
 
-	double end_lane_eps = 0.15;
+	double end_lane_eps = 0.2;
 	
 	int num_lanes = 3;
 	
@@ -266,7 +266,7 @@ public: // lane keep parameters
 
 	double d_curve_comp_coeff = 0.8;
 
-	double max_d_deviation = 0.15;
+	double max_d_deviation = 0.2;
 		
 public: // lane change parameters
 	double lane_change_duration = 3.0;
@@ -291,7 +291,7 @@ public: // safety parameters
 public: // interpoaltion parameters
 	int num_src_waypoints = 10;
 	
-	double interpolation_interval = 0.4;
+	double interpolation_interval = 0.5;
 	
 public: // status parameters
 	int num_cycle = 0;
