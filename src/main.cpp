@@ -241,6 +241,8 @@ public: // general parameters
 	double max_speed = 22.2; // 50 MPH = 22.352 m/s;
 	
 	double lane_width = 4.0;
+
+	double end_lane_eps = 0.25;
 	
 	int num_lanes = 3;
 	
@@ -252,7 +254,7 @@ public: // start parameters
 	double start_speed = 12.0;
 	
 public: // lane keep parameters
-	double lane_keep_duration = 0.6;
+	double lane_keep_duration = 0.65;
 	
 	double lane_keep_speed_change = 0.025;
 
@@ -264,7 +266,7 @@ public: // lane keep parameters
 
 	double d_curve_comp_coeff = 0.8;
 
-	double max_d_deviation = 0.4;
+	double max_d_deviation = 0.2;
 		
 public: // lane change parameters
 	double lane_change_duration = 3.0;
@@ -289,7 +291,7 @@ public: // safety parameters
 public: // interpoaltion parameters
 	int num_src_waypoints = 10;
 	
-	double interpolation_interval = 0.2;
+	double interpolation_interval = 0.4;
 	
 public: // status parameters
 	int num_cycle = 0;
@@ -606,7 +608,7 @@ int main() {
 				}
 				
 				// consider lane change only when the current status is keep lane and d is within current lane's safe range
-				double current_lane_d = (0.5 + ps.current_lane_id) * ps.lane_width;
+				double current_lane_d = Utils::laneD(ps.current_lane_id, ps.num_lanes, ps.lane_width, ps.end_lane_eps);
 				double lane_safe_d_width = 0.5 * ps.lane_width;
 				
 				if (ps.current_status == BehaviorStatus::KeepLane
@@ -697,7 +699,7 @@ int main() {
 				// calculate target d info
 				target_ddd = 0;
 				target_dd = 0;
-				target_d = (0.5 + ps.target_lane_id) * ps.lane_width;
+				target_d = Utils::laneD(ps.target_lane_id, ps.num_lanes, ps.lane_width, ps.end_lane_eps);
 
 				bool ds_decreased = false;
 
@@ -793,17 +795,17 @@ int main() {
 					double angle_diff = Utils::normalizeAngle(angle0 - angle1);
 					// printf("angle diff: %f\n", angle_diff);
 
-					double target_lane_d = (0.5 + ps.current_lane_id) * ps.lane_width;
-					// prevent outside lane
+					// double target_lane_d = (0.5 + ps.current_lane_id) * ps.lane_width;
+					// prevent d-wise acceleration error
 					if (ps.current_status == BehaviorStatus::KeepLane)
 					{
-						if (abs(cur_d - target_lane_d) > ps.max_d_deviation)
+						if (abs(cur_d - target_d) > ps.max_d_deviation)
 						{
-							pred_duration = max(pred_duration, ps.lane_curve_duration);
+							// pred_duration = max(pred_duration, ps.lane_curve_duration);
+
+							double d_sign = cur_d - target_d > 0 ? 1 : -1;
+							target_d = cur_d - d_sign * ps.max_d_deviation;
 						}
-
-						target_d = target_lane_d + 0.5 * (target_lane_d - cur_d);
-
 						// else if (abs(cur_d - target_lane_d) > 0.3 * ps.max_d_deviation)
 						// {
 						// 	double angle_sign = angle_diff > 0 ? 1 : -1;
@@ -813,12 +815,12 @@ int main() {
 						// }
 					}
 
-					if (!ds_decreased)
-					{
-						double ds_comp = cos(ps.ds_curve_comp_coeff * angle_diff);
-						//printf("target ds comp: %f %f \n", target_ds, ds_comp);
-						target_ds = target_ds * ds_comp;
-					}
+					// if (!ds_decreased)
+					// {
+					// 	double ds_comp = cos(ps.ds_curve_comp_coeff * angle_diff);
+					// 	//printf("target ds comp: %f %f \n", target_ds, ds_comp);
+					// 	target_ds = target_ds * ds_comp;
+					// }
 				}
 
 				// calculate efficient target s

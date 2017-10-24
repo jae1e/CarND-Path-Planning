@@ -64,6 +64,26 @@ void interpolatePoints(const vector<double>& along_points, const vector<double>&
 	output_points.push_back(along_points.back());
 }
 
+double laneD(int lane_id, int num_lane, double lane_width, double end_lane_eps)
+{
+	if (lane_id < 0 || lane_id > num_lane - 1)
+	{
+		return -1;
+	}
+
+	double d = (0.5 + lane_id) * lane_width;
+	if (lane_id == 0)
+	{
+		d += end_lane_eps;
+	}
+	else if (lane_id == num_lane - 1)
+	{
+		d -= end_lane_eps;
+	}
+
+	return d;
+}
+
 ///*
 //* prediction with constant jerk value,
 //* output: { accel, speed, pos }
