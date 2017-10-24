@@ -72,11 +72,11 @@ double laneD(int lane_id, int num_lane, double lane_width, double end_lane_eps)
 	}
 
 	double d = (0.5 + lane_id) * lane_width;
-	if (lane_id == 0)
-	{
-		d += end_lane_eps;
-	}
-	else if (lane_id == num_lane - 1)
+	// if (lane_id == 0)
+	// {
+	// 	d += end_lane_eps;
+	// }
+	if (lane_id == num_lane - 1)
 	{
 		d -= end_lane_eps;
 	}
